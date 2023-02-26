@@ -62,12 +62,41 @@ This is what this paper is trying to provide.
 
 ## Related Work
 
+### Reflection
+
 Of course, reflection would give us this. However, reflection
 ([@P2320R0],[@P1240R1],[@P2237R0],[@P2087R0],[@N4856]) is both nowhere close to
 shipping, and is far wider in scope as another `decltype`-ish proposal that's
 easily implementable today, and `std::execution` could use immediately.
 
 It's also not clear how difficult it would be to do with reflection.
+
+### Library fundamentals TS v3
+
+The [Library Fundamentals TS version 3](https://cplusplus.github.io/fundamentals-ts/v3.html#meta.trans.other)
+defines `invocation_type<F(Args...)` and `raw_invocation_type<F(Args...)>` with
+the hope of getting the function pointer type of a given call expression. 
+
+However, this is not good enough to actually be able to perform that call.
+
+Observe:
+
+```cpp
+struct S {
+  static void f(S) {} // #1
+  void f(this S) {}   // #2
+};
+void h() {
+  static_cast<void(*)(S)>(S::f) // error, ambiguous
+  S{}.f(S{}); // calls #1
+  S{}.f(); // calls #2
+  // no ambiguity for __builtin_calltarget
+  __builtin_calltarget(S{}.f(S{})); // &#1
+  __builtin_calltarget(S{}.f());    // &#2
+}
+```
+
+A library solution can't give us this, no matter how much we try.
 
 # Proposal
 
