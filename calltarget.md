@@ -86,6 +86,7 @@ user-defined function as its top-level AST-node (good luck to me wording this).
 Examples:
 
 ```cpp
+void g(long x) { return x+1; }
 void f() {}                                                // #1
 void f(int) {}                                             // #2
 struct S {
@@ -99,34 +100,62 @@ struct S {
   auto operator->(this auto&& self) const -> S*;           // #10
   auto operator[](this auto&& self, int i) -> int;         // #11
   static auto f(S) -> int;                                 // #12
+  using fptr = void(*)(long);
+  auto operator void(*)() const { return &g; }             // #13
 };
-S f(int, long) { return S{}; }                             // #13
+S f(int, long) { return S{}; }                             // #14
 struct U : S {}
 
 void h() {
   S s;
   U u;
-  __builtin_calltarget(f());                     // ok, &#1
-  __builtin_calltarget(f(1));                    // ok, &#2
-  __builtin_calltarget(f(std::declval<int>()));  // ok, &#2
-  __builtin_calltarget(s + s);                   // ok, &#3
-  __builtin_calltarget(-s);                      // ok, &#4
-  __builtin_calltarget(-u);                      // ok, &#4 (!)
-  __builtin_calltarget(s - s);                   // ok, &#5
-  __builtin_calltarget(s.f());                   // ok, &#6
-  __builtin_calltarget(u.f());                   // ok, &#6 (!)
-  __builtin_calltarget(s.f(2));                  // ok, &#7
-  __builtin_calltarget(s);                       // error, constructor
-  __builtin_calltarget(s.S::~S());               // error, destructor
-  __builtin_calltarget(s->f());                  // ok, &#10
-  __builtin_calltarget(s[1]);                    // ok, &#11
-  __builtin_calltarget(S::f(S{}));               // ok, &#12
-  __builtin_calltarget(s.f(S{}));                // ok, &#12
-  __builtin_calltarget(f(1, 2));                 // ok, &#13
-  __builtin_calltarget(new (nullptr) S());       // error, placement new is not a function
-  __builtin_calltarget(delete &s);               // error, delete is not a function
+  __builtin_calltarget(f());                     // ok, &#1             (A)
+  __builtin_calltarget(f(1));                    // ok, &#2             (B)
+  __builtin_calltarget(f(std::declval<int>()));  // ok, &#2             (C)
+  __builtin_calltarget(f(1s));                   // ok, &#2 (!)         (D)
+  __builtin_calltarget(s + s);                   // ok, &#3             (E)
+  __builtin_calltarget(-s);                      // ok, &#4             (F)
+  __builtin_calltarget(-u);                      // ok, &#4 (!)         (G)
+  __builtin_calltarget(s - s);                   // ok, &#5             (H)
+  __builtin_calltarget(s.f());                   // ok, &#6             (I)
+  __builtin_calltarget(u.f());                   // ok, &#6 (!)         (J)
+  __builtin_calltarget(s.f(2));                  // ok, &#7             (K)
+  __builtin_calltarget(s);                       // error, constructor  (L)
+  __builtin_calltarget(s.S::~S());               // error, destructor   (M)
+  __builtin_calltarget(s->f());                  // ok, &#6 (not &#10)  (N)
+  __builtin_calltarget(s.S::operator->());       // ok, &#10            (O)
+  __builtin_calltarget(s[1]);                    // ok, &#11            (P)
+  __builtin_calltarget(S::f(S{}));               // ok, &#12            (Q)
+  __builtin_calltarget(s.f(S{}));                // ok, &#12            (R)
+  __builtin_calltarget(s(1l));                   // ok, &#13            (S)
+  __builtin_calltarget(f(1, 2));                 // ok, &#14            (T)
+  __builtin_calltarget(new (nullptr) S());       // error, not function (U)
+  __builtin_calltarget(delete &s);               // error, not function (V)
+  __builtin_calltarget(1 + 1);                   // error, built-in     (W)
+  __builtin_calltarget([]{
+       return __builtin_calltarget(f());
+    }()());                                      // ok, &2              (X)
 }
 ```
+
+## Interesting cases in the above example
+
+- resolving different members of a free-function overload set (A, B, C, D, T)
+  - the (D) case is important - the `short` argument still resolves to the `int` overload!
+- constructors and destructors (L, M, U, V) - see the **possible extensions** chapter.
+- resolving different member of a member-function overload set (I, J, K, N, Q, R)
+  - the (J) example is important - the call on `u` still resolves to a member function of `S`.
+- resolving built-in non-functions (W): we could make this work in a future
+  extension (see that chapter).
+- resolving `operator->` (N and O). [expr.post.general]{.pnum} specifies that
+  `@_postfix-expression_@`s group left-to-right, which means the top-most
+  postfix-expression is the call to `f()`, and not the `->`. To get to
+  `S::operator->`, we have to ask for it explicitly.
+- surrogate function call (S) - again, the top-most call-expression is the
+  function call to `g`, so that is what is returned.
+- nested calls: (X) the top-level call is a call to a function-pointer to #2,
+  so that is what is returned.
+
 
 ## Alternatives to syntax
 
@@ -136,9 +165,42 @@ We could wait for reflection in which case the syntax would be
 
 However, I expect it would have rather more intricacies.
 
-# Future Extensions
+## Naming
+
+### Grabbing a pattern
+
+A suggestion of an esteemed former EWG chair is that we, as a committee, grab
+the keyword-space prefix `__std_meta_*` and have all the functions with that
+prefix have unevaluated arguments.
+
+In that case, this proposal becomes
+
+```cpp
+__std_meta_calltarget(@_unevaluated-expression_@);
+```
+
+This is done so as to stop wringing our hands about function-like APIs that
+have unevaluated operands, and going for less appropriate solutions for want of a function.
+The naming itself signals that it's not a normal function. Its address also
+can't be taken, it behaves as-if `consteval`.
+
+It's ugly on purpose. That's by design. It's not meant to be pretty.
+
+### Possible names
+
+For all intents and purposes, this facility grammatically behaves in the same
+way as `sizeof`, except that we should require the parentheses around the
+operand.
+
+We could call it something really long and unlikely to conflict, like
+`expression_targetof`, or `calltargetof` or `decltargetof` or `targetexpr` or
+`resolvetarget`.
+
+# Possible Extensions
 
 We could make compilers invent functions for the cases that currently aren't legal.
+
+## Inventing contructor free-functions
 
 For instance, constructor calls could "invent" a free function that is
 expression-equivalent to calling placement new on the return object:
@@ -157,6 +219,8 @@ auto y = constructor_pointer(my_other_immovable_type{});
 // x and y have no difference in construction.
 ```
 
+## Inventing destructor free-forms
+
 Or, for destructors (this would make smart pointers slightly faster and easier to do):
 
 ```cpp
@@ -164,6 +228,14 @@ std::same_as<void(*)(S&)> auto
   dtor = [](S* x){return __builtin_calltarget(x->~S());}(nullptr);
 S x;
 dtor(x); // expression-equivalent to x.~S()
+```
+
+## Inventing pointers to built-in functions
+
+We could invent pointers to functions that are otherwise built-in, like built-in operators:
+
+```cpp
+__builtin_calltarget(1+1); // &::operator+(int, int)
 ```
 
 # Usecases
