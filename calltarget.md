@@ -72,7 +72,7 @@ easily implementable today, and `std::execution` could use immediately.
 Regardless of how we chose to provide this facility, it is dearly needed, and
 should be provided by the standard library or a built-in.
 
-See the [Alternatives to Syntax](#AlternativesToSyntax) chapter for details.
+See the [Alternatives to Syntax](#alternatives-to-syntax) chapter for details.
 
 ### Library fundamentals TS v3
 
