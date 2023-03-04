@@ -69,7 +69,10 @@ Of course, reflection would give us this. However, reflection
 shipping, and is far wider in scope as another `decltype`-ish proposal that's
 easily implementable today, and `std::execution` could use immediately.
 
-It's also not clear how difficult it would be to do with reflection.
+Regardless of how we chose to provide this facility, it is dearly needed, and
+should be provided by the standard library or a built-in.
+
+See the [Alternatives to Syntax](#AlternativesToSyntax) chapter for details.
 
 ### Library fundamentals TS v3
 
@@ -96,7 +99,8 @@ void h() {
 }
 ```
 
-A library solution can't give us this, no matter how much we try.
+A library solution can't give us this, no matter how much we try, unless we can
+reflect on unevaluated operands (which Reflection does).
 
 # Proposal
 
@@ -109,8 +113,8 @@ one, and this behaves similarly):
 auto fptr = __builtin_calltarget(@_expression_@);
 ```
 
-Where the program is ill-formed if `@_expression_@` does not call a
-user-defined function as its top-level AST-node (good luck to me wording this).
+Where the program is ill-formed if `@_expression_@` does not call a function as
+its top-level AST-node (good luck to me wording this).
 
 Examples:
 
@@ -131,8 +135,9 @@ struct S {
   static auto f(S) -> int;                                 // #12
   using fptr = void(*)(long);
   auto operator void(*)() const { return &g; }             // #13
+  auto operator<=>(S const&) = default;                    // #14
 };
-S f(int, long) { return S{}; }                             // #14
+S f(int, long) { return S{}; }                             // #15
 struct U : S {}
 
 void h() {
@@ -157,13 +162,14 @@ void h() {
   __builtin_calltarget(S::f(S{}));               // ok, &#12            (Q)
   __builtin_calltarget(s.f(S{}));                // ok, &#12            (R)
   __builtin_calltarget(s(1l));                   // ok, &#13            (S)
-  __builtin_calltarget(f(1, 2));                 // ok, &#14            (T)
+  __builtin_calltarget(f(1, 2));                 // ok, &#15            (T)
   __builtin_calltarget(new (nullptr) S());       // error, not function (U)
   __builtin_calltarget(delete &s);               // error, not function (V)
   __builtin_calltarget(1 + 1);                   // error, built-in     (W)
   __builtin_calltarget([]{
        return __builtin_calltarget(f());
     }()());                                      // ok, &2              (X)
+  __builtin_calltarget(S{} < S{});               // error, synthesized  (Y)
 }
 ```
 
@@ -184,15 +190,37 @@ void h() {
   function call to `g`, so that is what is returned.
 - nested calls: (X) the top-level call is a call to a function-pointer to #2,
   so that is what is returned.
+- Synthesized operators (Y) - these are not functions that we can take pointers
+  to, so unless we "force-manufacture" one, we can't make this work.
 
 
 ## Alternatives to syntax
 
-We could wait for reflection in which case the syntax would be
+We could wait for reflection in which case we could write `call_target` roughly as
 
-`(^f()).TODO_ASK_SUTTON_OR_VANDEVOORDE()`.
+```cpp
+namespace std::meta {
+  template<info r> constexpr auto call_target = []{
+    if constexpr (is_nonstatic_member(r)) {
+      return pointer_to_member<[:pm_type_of(r):]>(r);
+    } else {
+      return entity_ref<[:type_of:]>(r);
+    } /* insert additional cases as we define them. */
+  }();
+}
+```
 
-However, I expect it would have rather more intricacies.
+And call it as
+
+```cpp
+auto my_expr_ptr = call_target<^f()>;
+```
+
+It's unlikely to be quite as efficient as just hooking directly into the
+resolver, but it does have the nice property that it doesn't take up a whole
+keyword.
+
+Many thanks to Daveed Vandevoorde for helping out with this example.
 
 ## Naming
 
@@ -248,6 +276,12 @@ auto y = constructor_pointer(my_other_immovable_type{});
 // x and y have no difference in construction.
 ```
 
+The main problem with this is that free functions have a different ABI than
+constructors of aggregates - they would have to expose where to construct the
+arguments in their signatures.
+
+This paper is not about that, so we leave it for the future.
+
 ## Inventing destructor free-forms
 
 Or, for destructors (this would make smart pointers slightly faster and easier to do):
@@ -286,7 +320,8 @@ Two things, mainly:
 ## That's not good enough to do all that work. What else?
 
 Together with [@P2826R0], the two papers constitute the ability to implement
-_expression-equivalent_.
+_expression-equivalent_ in many important cases (not all, that's probably
+impossible).
 
 [@P2826R0] proposes a way for a function signature to participate in overload
 resolution and, if it wins, be replaced by some other function.

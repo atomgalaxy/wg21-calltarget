@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="generator" content="mpark/wg21" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
-  <meta name="dcterms.date" content="2023-02-26" />
+  <meta name="dcterms.date" content="2023-03-04" />
   <title>calltarget(unevaluated-call-expression)</title>
   <style>
       code{white-space: pre-wrap;}
@@ -427,7 +427,7 @@ code.sourceCode > span { display: inline; }
   </tr>
   <tr>
     <td>Date:</td>
-    <td>2023-02-26</td>
+    <td>2023-03-04</td>
   </tr>
   <tr>
     <td style="vertical-align:top">Project:</td>
@@ -543,8 +543,11 @@ shipping, and is far wider in scope as another
 easily implementable today, and
 <code class="sourceCode default">std::execution</code> could use
 immediately.</p>
-<p>It’s also not clear how difficult it would be to do with
-reflection.</p>
+<p>Regardless of how we chose to provide this facility, it is dearly
+needed, and should be provided by the standard library or a
+built-in.</p>
+<p>See the <a href="#AlternativesToSyntax">Alternatives to Syntax</a>
+chapter for details.</p>
 <h3 data-number="2.1.2" id="library-fundamentals-ts-v3"><span class="header-section-number">2.1.2</span> Library fundamentals TS v3<a href="#library-fundamentals-ts-v3" class="self-link"></a></h3>
 <p>The <a href="https://cplusplus.github.io/fundamentals-ts/v3.html#meta.trans.other">Library
 Fundamentals TS version 3</a> defines
@@ -567,7 +570,9 @@ call.</p>
 <span id="cb2-10"><a href="#cb2-10" aria-hidden="true" tabindex="-1"></a>  <span class="fu">__builtin_calltarget</span><span class="op">(</span>S<span class="op">{}.</span>f<span class="op">(</span>S<span class="op">{}))</span>; <span class="co">// &amp;#1</span></span>
 <span id="cb2-11"><a href="#cb2-11" aria-hidden="true" tabindex="-1"></a>  <span class="fu">__builtin_calltarget</span><span class="op">(</span>S<span class="op">{}.</span>f<span class="op">())</span>;    <span class="co">// &amp;#2</span></span>
 <span id="cb2-12"><a href="#cb2-12" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
-<p>A library solution can’t give us this, no matter how much we try.</p>
+<p>A library solution can’t give us this, no matter how much we try,
+unless we can reflect on unevaluated operands (which Reflection
+does).</p>
 <h1 data-number="3" id="proposal"><span class="header-section-number">3</span> Proposal<a href="#proposal" class="self-link"></a></h1>
 <p>We propose a new (technically) non-overloadable operator (because
 <code class="sourceCode default">sizeof</code> is one, and this behaves
@@ -576,8 +581,8 @@ similarly):</p>
 <div class="sourceCode" id="cb3"><pre class="sourceCode cpp"><code class="sourceCode cpp"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="kw">auto</span> fptr <span class="op">=</span> <span class="fu">__builtin_calltarget</span><span class="op">(</span><em>expression</em><span class="op">)</span>;</span></code></pre></div>
 <p>Where the program is ill-formed if
 <code class="sourceCode default"><em>expression</em></code> does not
-call a user-defined function as its top-level AST-node (good luck to me
-wording this).</p>
+call a function as its top-level AST-node (good luck to me wording
+this).</p>
 <p>Examples:</p>
 <div class="sourceCode" id="cb4"><pre class="sourceCode cpp"><code class="sourceCode cpp"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="dt">void</span> g<span class="op">(</span><span class="dt">long</span> x<span class="op">)</span> <span class="op">{</span> <span class="cf">return</span> x<span class="op">+</span><span class="dv">1</span>; <span class="op">}</span></span>
 <span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a><span class="dt">void</span> f<span class="op">()</span> <span class="op">{}</span>                                                <span class="co">// #1</span></span>
@@ -595,40 +600,42 @@ wording this).</p>
 <span id="cb4-14"><a href="#cb4-14" aria-hidden="true" tabindex="-1"></a>  <span class="kw">static</span> <span class="kw">auto</span> f<span class="op">(</span>S<span class="op">)</span> <span class="op">-&gt;</span> <span class="dt">int</span>;                                 <span class="co">// #12</span></span>
 <span id="cb4-15"><a href="#cb4-15" aria-hidden="true" tabindex="-1"></a>  <span class="kw">using</span> fptr <span class="op">=</span> <span class="dt">void</span><span class="op">(*)(</span><span class="dt">long</span><span class="op">)</span>;</span>
 <span id="cb4-16"><a href="#cb4-16" aria-hidden="true" tabindex="-1"></a>  <span class="kw">auto</span> <span class="kw">operator</span> <span class="dt">void</span><span class="op">(*)()</span> <span class="kw">const</span> <span class="op">{</span> <span class="cf">return</span> <span class="op">&amp;</span>g; <span class="op">}</span>             <span class="co">// #13</span></span>
-<span id="cb4-17"><a href="#cb4-17" aria-hidden="true" tabindex="-1"></a><span class="op">}</span>;</span>
-<span id="cb4-18"><a href="#cb4-18" aria-hidden="true" tabindex="-1"></a>S f<span class="op">(</span><span class="dt">int</span>, <span class="dt">long</span><span class="op">)</span> <span class="op">{</span> <span class="cf">return</span> S<span class="op">{}</span>; <span class="op">}</span>                             <span class="co">// #14</span></span>
-<span id="cb4-19"><a href="#cb4-19" aria-hidden="true" tabindex="-1"></a><span class="kw">struct</span> U <span class="op">:</span> S <span class="op">{}</span></span>
-<span id="cb4-20"><a href="#cb4-20" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb4-21"><a href="#cb4-21" aria-hidden="true" tabindex="-1"></a><span class="dt">void</span> h<span class="op">()</span> <span class="op">{</span></span>
-<span id="cb4-22"><a href="#cb4-22" aria-hidden="true" tabindex="-1"></a>  S s;</span>
-<span id="cb4-23"><a href="#cb4-23" aria-hidden="true" tabindex="-1"></a>  U u;</span>
-<span id="cb4-24"><a href="#cb4-24" aria-hidden="true" tabindex="-1"></a>  <span class="fu">__builtin_calltarget</span><span class="op">(</span>f<span class="op">())</span>;                     <span class="co">// ok, &amp;#1             (A)</span></span>
-<span id="cb4-25"><a href="#cb4-25" aria-hidden="true" tabindex="-1"></a>  <span class="fu">__builtin_calltarget</span><span class="op">(</span>f<span class="op">(</span><span class="dv">1</span><span class="op">))</span>;                    <span class="co">// ok, &amp;#2             (B)</span></span>
-<span id="cb4-26"><a href="#cb4-26" aria-hidden="true" tabindex="-1"></a>  <span class="fu">__builtin_calltarget</span><span class="op">(</span>f<span class="op">(</span>std<span class="op">::</span>declval<span class="op">&lt;</span><span class="dt">int</span><span class="op">&gt;()))</span>;  <span class="co">// ok, &amp;#2             (C)</span></span>
-<span id="cb4-27"><a href="#cb4-27" aria-hidden="true" tabindex="-1"></a>  <span class="fu">__builtin_calltarget</span><span class="op">(</span>f<span class="op">(</span><span class="dv">1</span><span class="bu">s</span><span class="op">))</span>;                   <span class="co">// ok, &amp;#2 (!)         (D)</span></span>
-<span id="cb4-28"><a href="#cb4-28" aria-hidden="true" tabindex="-1"></a>  <span class="fu">__builtin_calltarget</span><span class="op">(</span>s <span class="op">+</span> s<span class="op">)</span>;                   <span class="co">// ok, &amp;#3             (E)</span></span>
-<span id="cb4-29"><a href="#cb4-29" aria-hidden="true" tabindex="-1"></a>  <span class="fu">__builtin_calltarget</span><span class="op">(-</span>s<span class="op">)</span>;                      <span class="co">// ok, &amp;#4             (F)</span></span>
-<span id="cb4-30"><a href="#cb4-30" aria-hidden="true" tabindex="-1"></a>  <span class="fu">__builtin_calltarget</span><span class="op">(-</span>u<span class="op">)</span>;                      <span class="co">// ok, &amp;#4 (!)         (G)</span></span>
-<span id="cb4-31"><a href="#cb4-31" aria-hidden="true" tabindex="-1"></a>  <span class="fu">__builtin_calltarget</span><span class="op">(</span>s <span class="op">-</span> s<span class="op">)</span>;                   <span class="co">// ok, &amp;#5             (H)</span></span>
-<span id="cb4-32"><a href="#cb4-32" aria-hidden="true" tabindex="-1"></a>  <span class="fu">__builtin_calltarget</span><span class="op">(</span>s<span class="op">.</span>f<span class="op">())</span>;                   <span class="co">// ok, &amp;#6             (I)</span></span>
-<span id="cb4-33"><a href="#cb4-33" aria-hidden="true" tabindex="-1"></a>  <span class="fu">__builtin_calltarget</span><span class="op">(</span>u<span class="op">.</span>f<span class="op">())</span>;                   <span class="co">// ok, &amp;#6 (!)         (J)</span></span>
-<span id="cb4-34"><a href="#cb4-34" aria-hidden="true" tabindex="-1"></a>  <span class="fu">__builtin_calltarget</span><span class="op">(</span>s<span class="op">.</span>f<span class="op">(</span><span class="dv">2</span><span class="op">))</span>;                  <span class="co">// ok, &amp;#7             (K)</span></span>
-<span id="cb4-35"><a href="#cb4-35" aria-hidden="true" tabindex="-1"></a>  <span class="fu">__builtin_calltarget</span><span class="op">(</span>s<span class="op">)</span>;                       <span class="co">// error, constructor  (L)</span></span>
-<span id="cb4-36"><a href="#cb4-36" aria-hidden="true" tabindex="-1"></a>  <span class="fu">__builtin_calltarget</span><span class="op">(</span>s<span class="op">.</span>S<span class="op">::~</span>S<span class="op">())</span>;               <span class="co">// error, destructor   (M)</span></span>
-<span id="cb4-37"><a href="#cb4-37" aria-hidden="true" tabindex="-1"></a>  <span class="fu">__builtin_calltarget</span><span class="op">(</span>s<span class="op">-&gt;</span>f<span class="op">())</span>;                  <span class="co">// ok, &amp;#6 (not &amp;#10)  (N)</span></span>
-<span id="cb4-38"><a href="#cb4-38" aria-hidden="true" tabindex="-1"></a>  <span class="fu">__builtin_calltarget</span><span class="op">(</span>s<span class="op">.</span>S<span class="op">::</span><span class="kw">operator</span><span class="op">-&gt;())</span>;       <span class="co">// ok, &amp;#10            (O)</span></span>
-<span id="cb4-39"><a href="#cb4-39" aria-hidden="true" tabindex="-1"></a>  <span class="fu">__builtin_calltarget</span><span class="op">(</span>s<span class="op">[</span><span class="dv">1</span><span class="op">])</span>;                    <span class="co">// ok, &amp;#11            (P)</span></span>
-<span id="cb4-40"><a href="#cb4-40" aria-hidden="true" tabindex="-1"></a>  <span class="fu">__builtin_calltarget</span><span class="op">(</span>S<span class="op">::</span>f<span class="op">(</span>S<span class="op">{}))</span>;               <span class="co">// ok, &amp;#12            (Q)</span></span>
-<span id="cb4-41"><a href="#cb4-41" aria-hidden="true" tabindex="-1"></a>  <span class="fu">__builtin_calltarget</span><span class="op">(</span>s<span class="op">.</span>f<span class="op">(</span>S<span class="op">{}))</span>;                <span class="co">// ok, &amp;#12            (R)</span></span>
-<span id="cb4-42"><a href="#cb4-42" aria-hidden="true" tabindex="-1"></a>  <span class="fu">__builtin_calltarget</span><span class="op">(</span>s<span class="op">(</span><span class="dv">1</span><span class="bu">l</span><span class="op">))</span>;                   <span class="co">// ok, &amp;#13            (S)</span></span>
-<span id="cb4-43"><a href="#cb4-43" aria-hidden="true" tabindex="-1"></a>  <span class="fu">__builtin_calltarget</span><span class="op">(</span>f<span class="op">(</span><span class="dv">1</span>, <span class="dv">2</span><span class="op">))</span>;                 <span class="co">// ok, &amp;#14            (T)</span></span>
-<span id="cb4-44"><a href="#cb4-44" aria-hidden="true" tabindex="-1"></a>  <span class="fu">__builtin_calltarget</span><span class="op">(</span><span class="kw">new</span> <span class="op">(</span><span class="kw">nullptr</span><span class="op">)</span> S<span class="op">())</span>;       <span class="co">// error, not function (U)</span></span>
-<span id="cb4-45"><a href="#cb4-45" aria-hidden="true" tabindex="-1"></a>  <span class="fu">__builtin_calltarget</span><span class="op">(</span><span class="kw">delete</span> <span class="op">&amp;</span>s<span class="op">)</span>;               <span class="co">// error, not function (V)</span></span>
-<span id="cb4-46"><a href="#cb4-46" aria-hidden="true" tabindex="-1"></a>  <span class="fu">__builtin_calltarget</span><span class="op">(</span><span class="dv">1</span> <span class="op">+</span> <span class="dv">1</span><span class="op">)</span>;                   <span class="co">// error, built-in     (W)</span></span>
-<span id="cb4-47"><a href="#cb4-47" aria-hidden="true" tabindex="-1"></a>  <span class="fu">__builtin_calltarget</span><span class="op">([]{</span></span>
-<span id="cb4-48"><a href="#cb4-48" aria-hidden="true" tabindex="-1"></a>       <span class="cf">return</span> <span class="fu">__builtin_calltarget</span><span class="op">(</span>f<span class="op">())</span>;</span>
-<span id="cb4-49"><a href="#cb4-49" aria-hidden="true" tabindex="-1"></a>    <span class="op">}()())</span>;                                      <span class="co">// ok, &amp;2              (X)</span></span>
-<span id="cb4-50"><a href="#cb4-50" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<span id="cb4-17"><a href="#cb4-17" aria-hidden="true" tabindex="-1"></a>  <span class="kw">auto</span> <span class="kw">operator</span><span class="op">&lt;=&gt;(</span>S <span class="kw">const</span><span class="op">&amp;)</span> <span class="op">=</span> <span class="cf">default</span>;                    <span class="co">// #14</span></span>
+<span id="cb4-18"><a href="#cb4-18" aria-hidden="true" tabindex="-1"></a><span class="op">}</span>;</span>
+<span id="cb4-19"><a href="#cb4-19" aria-hidden="true" tabindex="-1"></a>S f<span class="op">(</span><span class="dt">int</span>, <span class="dt">long</span><span class="op">)</span> <span class="op">{</span> <span class="cf">return</span> S<span class="op">{}</span>; <span class="op">}</span>                             <span class="co">// #15</span></span>
+<span id="cb4-20"><a href="#cb4-20" aria-hidden="true" tabindex="-1"></a><span class="kw">struct</span> U <span class="op">:</span> S <span class="op">{}</span></span>
+<span id="cb4-21"><a href="#cb4-21" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-22"><a href="#cb4-22" aria-hidden="true" tabindex="-1"></a><span class="dt">void</span> h<span class="op">()</span> <span class="op">{</span></span>
+<span id="cb4-23"><a href="#cb4-23" aria-hidden="true" tabindex="-1"></a>  S s;</span>
+<span id="cb4-24"><a href="#cb4-24" aria-hidden="true" tabindex="-1"></a>  U u;</span>
+<span id="cb4-25"><a href="#cb4-25" aria-hidden="true" tabindex="-1"></a>  <span class="fu">__builtin_calltarget</span><span class="op">(</span>f<span class="op">())</span>;                     <span class="co">// ok, &amp;#1             (A)</span></span>
+<span id="cb4-26"><a href="#cb4-26" aria-hidden="true" tabindex="-1"></a>  <span class="fu">__builtin_calltarget</span><span class="op">(</span>f<span class="op">(</span><span class="dv">1</span><span class="op">))</span>;                    <span class="co">// ok, &amp;#2             (B)</span></span>
+<span id="cb4-27"><a href="#cb4-27" aria-hidden="true" tabindex="-1"></a>  <span class="fu">__builtin_calltarget</span><span class="op">(</span>f<span class="op">(</span>std<span class="op">::</span>declval<span class="op">&lt;</span><span class="dt">int</span><span class="op">&gt;()))</span>;  <span class="co">// ok, &amp;#2             (C)</span></span>
+<span id="cb4-28"><a href="#cb4-28" aria-hidden="true" tabindex="-1"></a>  <span class="fu">__builtin_calltarget</span><span class="op">(</span>f<span class="op">(</span><span class="dv">1</span><span class="bu">s</span><span class="op">))</span>;                   <span class="co">// ok, &amp;#2 (!)         (D)</span></span>
+<span id="cb4-29"><a href="#cb4-29" aria-hidden="true" tabindex="-1"></a>  <span class="fu">__builtin_calltarget</span><span class="op">(</span>s <span class="op">+</span> s<span class="op">)</span>;                   <span class="co">// ok, &amp;#3             (E)</span></span>
+<span id="cb4-30"><a href="#cb4-30" aria-hidden="true" tabindex="-1"></a>  <span class="fu">__builtin_calltarget</span><span class="op">(-</span>s<span class="op">)</span>;                      <span class="co">// ok, &amp;#4             (F)</span></span>
+<span id="cb4-31"><a href="#cb4-31" aria-hidden="true" tabindex="-1"></a>  <span class="fu">__builtin_calltarget</span><span class="op">(-</span>u<span class="op">)</span>;                      <span class="co">// ok, &amp;#4 (!)         (G)</span></span>
+<span id="cb4-32"><a href="#cb4-32" aria-hidden="true" tabindex="-1"></a>  <span class="fu">__builtin_calltarget</span><span class="op">(</span>s <span class="op">-</span> s<span class="op">)</span>;                   <span class="co">// ok, &amp;#5             (H)</span></span>
+<span id="cb4-33"><a href="#cb4-33" aria-hidden="true" tabindex="-1"></a>  <span class="fu">__builtin_calltarget</span><span class="op">(</span>s<span class="op">.</span>f<span class="op">())</span>;                   <span class="co">// ok, &amp;#6             (I)</span></span>
+<span id="cb4-34"><a href="#cb4-34" aria-hidden="true" tabindex="-1"></a>  <span class="fu">__builtin_calltarget</span><span class="op">(</span>u<span class="op">.</span>f<span class="op">())</span>;                   <span class="co">// ok, &amp;#6 (!)         (J)</span></span>
+<span id="cb4-35"><a href="#cb4-35" aria-hidden="true" tabindex="-1"></a>  <span class="fu">__builtin_calltarget</span><span class="op">(</span>s<span class="op">.</span>f<span class="op">(</span><span class="dv">2</span><span class="op">))</span>;                  <span class="co">// ok, &amp;#7             (K)</span></span>
+<span id="cb4-36"><a href="#cb4-36" aria-hidden="true" tabindex="-1"></a>  <span class="fu">__builtin_calltarget</span><span class="op">(</span>s<span class="op">)</span>;                       <span class="co">// error, constructor  (L)</span></span>
+<span id="cb4-37"><a href="#cb4-37" aria-hidden="true" tabindex="-1"></a>  <span class="fu">__builtin_calltarget</span><span class="op">(</span>s<span class="op">.</span>S<span class="op">::~</span>S<span class="op">())</span>;               <span class="co">// error, destructor   (M)</span></span>
+<span id="cb4-38"><a href="#cb4-38" aria-hidden="true" tabindex="-1"></a>  <span class="fu">__builtin_calltarget</span><span class="op">(</span>s<span class="op">-&gt;</span>f<span class="op">())</span>;                  <span class="co">// ok, &amp;#6 (not &amp;#10)  (N)</span></span>
+<span id="cb4-39"><a href="#cb4-39" aria-hidden="true" tabindex="-1"></a>  <span class="fu">__builtin_calltarget</span><span class="op">(</span>s<span class="op">.</span>S<span class="op">::</span><span class="kw">operator</span><span class="op">-&gt;())</span>;       <span class="co">// ok, &amp;#10            (O)</span></span>
+<span id="cb4-40"><a href="#cb4-40" aria-hidden="true" tabindex="-1"></a>  <span class="fu">__builtin_calltarget</span><span class="op">(</span>s<span class="op">[</span><span class="dv">1</span><span class="op">])</span>;                    <span class="co">// ok, &amp;#11            (P)</span></span>
+<span id="cb4-41"><a href="#cb4-41" aria-hidden="true" tabindex="-1"></a>  <span class="fu">__builtin_calltarget</span><span class="op">(</span>S<span class="op">::</span>f<span class="op">(</span>S<span class="op">{}))</span>;               <span class="co">// ok, &amp;#12            (Q)</span></span>
+<span id="cb4-42"><a href="#cb4-42" aria-hidden="true" tabindex="-1"></a>  <span class="fu">__builtin_calltarget</span><span class="op">(</span>s<span class="op">.</span>f<span class="op">(</span>S<span class="op">{}))</span>;                <span class="co">// ok, &amp;#12            (R)</span></span>
+<span id="cb4-43"><a href="#cb4-43" aria-hidden="true" tabindex="-1"></a>  <span class="fu">__builtin_calltarget</span><span class="op">(</span>s<span class="op">(</span><span class="dv">1</span><span class="bu">l</span><span class="op">))</span>;                   <span class="co">// ok, &amp;#13            (S)</span></span>
+<span id="cb4-44"><a href="#cb4-44" aria-hidden="true" tabindex="-1"></a>  <span class="fu">__builtin_calltarget</span><span class="op">(</span>f<span class="op">(</span><span class="dv">1</span>, <span class="dv">2</span><span class="op">))</span>;                 <span class="co">// ok, &amp;#15            (T)</span></span>
+<span id="cb4-45"><a href="#cb4-45" aria-hidden="true" tabindex="-1"></a>  <span class="fu">__builtin_calltarget</span><span class="op">(</span><span class="kw">new</span> <span class="op">(</span><span class="kw">nullptr</span><span class="op">)</span> S<span class="op">())</span>;       <span class="co">// error, not function (U)</span></span>
+<span id="cb4-46"><a href="#cb4-46" aria-hidden="true" tabindex="-1"></a>  <span class="fu">__builtin_calltarget</span><span class="op">(</span><span class="kw">delete</span> <span class="op">&amp;</span>s<span class="op">)</span>;               <span class="co">// error, not function (V)</span></span>
+<span id="cb4-47"><a href="#cb4-47" aria-hidden="true" tabindex="-1"></a>  <span class="fu">__builtin_calltarget</span><span class="op">(</span><span class="dv">1</span> <span class="op">+</span> <span class="dv">1</span><span class="op">)</span>;                   <span class="co">// error, built-in     (W)</span></span>
+<span id="cb4-48"><a href="#cb4-48" aria-hidden="true" tabindex="-1"></a>  <span class="fu">__builtin_calltarget</span><span class="op">([]{</span></span>
+<span id="cb4-49"><a href="#cb4-49" aria-hidden="true" tabindex="-1"></a>       <span class="cf">return</span> <span class="fu">__builtin_calltarget</span><span class="op">(</span>f<span class="op">())</span>;</span>
+<span id="cb4-50"><a href="#cb4-50" aria-hidden="true" tabindex="-1"></a>    <span class="op">}()())</span>;                                      <span class="co">// ok, &amp;2              (X)</span></span>
+<span id="cb4-51"><a href="#cb4-51" aria-hidden="true" tabindex="-1"></a>  <span class="fu">__builtin_calltarget</span><span class="op">(</span>S<span class="op">{}</span> <span class="op">&lt;</span> S<span class="op">{})</span>;               <span class="co">// error, synthesized  (Y)</span></span>
+<span id="cb4-52"><a href="#cb4-52" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
 <h2 data-number="3.1" id="interesting-cases-in-the-above-example"><span class="header-section-number">3.1</span> Interesting cases in the above
 example<a href="#interesting-cases-in-the-above-example" class="self-link"></a></h2>
 <ul>
@@ -664,11 +671,29 @@ the function call to <code class="sourceCode default">g</code>, so that
 is what is returned.</li>
 <li>nested calls: (X) the top-level call is a call to a function-pointer
 to #2, so that is what is returned.</li>
+<li>Synthesized operators (Y) - these are not functions that we can take
+pointers to, so unless we “force-manufacture” one, we can’t make this
+work.</li>
 </ul>
 <h2 data-number="3.2" id="alternatives-to-syntax"><span class="header-section-number">3.2</span> Alternatives to syntax<a href="#alternatives-to-syntax" class="self-link"></a></h2>
-<p>We could wait for reflection in which case the syntax would be</p>
-<p><code class="sourceCode default">(^f()).TODO_ASK_SUTTON_OR_VANDEVOORDE()</code>.</p>
-<p>However, I expect it would have rather more intricacies.</p>
+<p>We could wait for reflection in which case we could write
+<code class="sourceCode default">call_target</code> roughly as</p>
+<div class="sourceCode" id="cb5"><pre class="sourceCode cpp"><code class="sourceCode cpp"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="kw">namespace</span> std<span class="op">::</span>meta <span class="op">{</span></span>
+<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a>  <span class="kw">template</span><span class="op">&lt;</span>info r<span class="op">&gt;</span> <span class="kw">constexpr</span> <span class="kw">auto</span> call_target <span class="op">=</span> <span class="op">[]{</span></span>
+<span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> <span class="kw">constexpr</span> <span class="op">(</span>is_nonstatic_member<span class="op">(</span>r<span class="op">))</span> <span class="op">{</span></span>
+<span id="cb5-4"><a href="#cb5-4" aria-hidden="true" tabindex="-1"></a>      <span class="cf">return</span> pointer_to_member<span class="op">&lt;[:</span>pm_type_of<span class="op">(</span>r<span class="op">):]&gt;(</span>r<span class="op">)</span>;</span>
+<span id="cb5-5"><a href="#cb5-5" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span> <span class="cf">else</span> <span class="op">{</span></span>
+<span id="cb5-6"><a href="#cb5-6" aria-hidden="true" tabindex="-1"></a>      <span class="cf">return</span> entity_ref<span class="op">&lt;[:</span>type_of<span class="op">:]&gt;(</span>r<span class="op">)</span>;</span>
+<span id="cb5-7"><a href="#cb5-7" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span> <span class="co">/* insert additional cases as we define them. */</span></span>
+<span id="cb5-8"><a href="#cb5-8" aria-hidden="true" tabindex="-1"></a>  <span class="op">}()</span>;</span>
+<span id="cb5-9"><a href="#cb5-9" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<p>And call it as</p>
+<div class="sourceCode" id="cb6"><pre class="sourceCode cpp"><code class="sourceCode cpp"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="kw">auto</span> my_expr_ptr <span class="op">=</span> call_target<span class="op">&lt;^</span>f<span class="op">()&gt;</span>;</span></code></pre></div>
+<p>It’s unlikely to be quite as efficient as just hooking directly into
+the resolver, but it does have the nice property that it doesn’t take up
+a whole keyword.</p>
+<p>Many thanks to Daveed Vandevoorde for helping out with this
+example.</p>
 <h2 data-number="3.3" id="naming"><span class="header-section-number">3.3</span> Naming<a href="#naming" class="self-link"></a></h2>
 <h3 data-number="3.3.1" id="grabbing-a-pattern"><span class="header-section-number">3.3.1</span> Grabbing a pattern<a href="#grabbing-a-pattern" class="self-link"></a></h3>
 <p>A suggestion of an esteemed former EWG chair is that we, as a
@@ -676,7 +701,7 @@ committee, grab the keyword-space prefix
 <code class="sourceCode default">__std_meta_*</code> and have all the
 functions with that prefix have unevaluated arguments.</p>
 <p>In that case, this proposal becomes</p>
-<div class="sourceCode" id="cb5"><pre class="sourceCode cpp"><code class="sourceCode cpp"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a>__std_meta_calltarget<span class="op">(</span><em>unevaluated-expression</em><span class="op">)</span>;</span></code></pre></div>
+<div class="sourceCode" id="cb7"><pre class="sourceCode cpp"><code class="sourceCode cpp"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a>__std_meta_calltarget<span class="op">(</span><em>unevaluated-expression</em><span class="op">)</span>;</span></code></pre></div>
 <p>This is done so as to stop wringing our hands about function-like
 APIs that have unevaluated operands, and going for less appropriate
 solutions for want of a function. The naming itself signals that it’s
@@ -702,30 +727,34 @@ free-functions<a href="#inventing-contructor-free-functions" class="self-link"><
 <p>For instance, constructor calls could “invent” a free function that
 is expression-equivalent to calling placement new on the return
 object:</p>
-<div class="sourceCode" id="cb6"><pre class="sourceCode cpp"><code class="sourceCode cpp"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="co">// immovable aggregate</span></span>
-<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a><span class="kw">struct</span> my_immovable_type <span class="op">{</span></span>
-<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a>  my_other_immovable_type x;</span>
-<span id="cb6-4"><a href="#cb6-4" aria-hidden="true" tabindex="-1"></a>  some_immovable_type y <span class="op">=</span> <span class="op">{}</span>;</span>
-<span id="cb6-5"><a href="#cb6-5" aria-hidden="true" tabindex="-1"></a><span class="op">}</span>;</span>
-<span id="cb6-6"><a href="#cb6-6" aria-hidden="true" tabindex="-1"></a>my_immovable_type x<span class="op">(</span>my_other_immovable_type<span class="op">{})</span>;</span>
-<span id="cb6-7"><a href="#cb6-7" aria-hidden="true" tabindex="-1"></a><span class="co">// note: prvalue parameters in type, since in-place construction through copy-elision is possible</span></span>
-<span id="cb6-8"><a href="#cb6-8" aria-hidden="true" tabindex="-1"></a>std<span class="op">::</span>same_as<span class="op">&lt;</span>my_immovable_type<span class="op">(*)(</span>my_other_immovable_type, some_immovable_type<span class="op">)&gt;</span> </span>
-<span id="cb6-9"><a href="#cb6-9" aria-hidden="true" tabindex="-1"></a>  <span class="kw">auto</span> constructor_pointer <span class="op">=</span> <span class="fu">__builtin_calltarget</span><span class="op">(</span>my_immovable_type<span class="op">(</span>my_other_immovable_type<span class="op">{}))</span>;</span>
-<span id="cb6-10"><a href="#cb6-10" aria-hidden="true" tabindex="-1"></a><span class="kw">auto</span> y <span class="op">=</span> constructor_pointer<span class="op">(</span>my_other_immovable_type<span class="op">{})</span>;</span>
-<span id="cb6-11"><a href="#cb6-11" aria-hidden="true" tabindex="-1"></a><span class="co">// x and y have no difference in construction.</span></span></code></pre></div>
+<div class="sourceCode" id="cb8"><pre class="sourceCode cpp"><code class="sourceCode cpp"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a><span class="co">// immovable aggregate</span></span>
+<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a><span class="kw">struct</span> my_immovable_type <span class="op">{</span></span>
+<span id="cb8-3"><a href="#cb8-3" aria-hidden="true" tabindex="-1"></a>  my_other_immovable_type x;</span>
+<span id="cb8-4"><a href="#cb8-4" aria-hidden="true" tabindex="-1"></a>  some_immovable_type y <span class="op">=</span> <span class="op">{}</span>;</span>
+<span id="cb8-5"><a href="#cb8-5" aria-hidden="true" tabindex="-1"></a><span class="op">}</span>;</span>
+<span id="cb8-6"><a href="#cb8-6" aria-hidden="true" tabindex="-1"></a>my_immovable_type x<span class="op">(</span>my_other_immovable_type<span class="op">{})</span>;</span>
+<span id="cb8-7"><a href="#cb8-7" aria-hidden="true" tabindex="-1"></a><span class="co">// note: prvalue parameters in type, since in-place construction through copy-elision is possible</span></span>
+<span id="cb8-8"><a href="#cb8-8" aria-hidden="true" tabindex="-1"></a>std<span class="op">::</span>same_as<span class="op">&lt;</span>my_immovable_type<span class="op">(*)(</span>my_other_immovable_type, some_immovable_type<span class="op">)&gt;</span> </span>
+<span id="cb8-9"><a href="#cb8-9" aria-hidden="true" tabindex="-1"></a>  <span class="kw">auto</span> constructor_pointer <span class="op">=</span> <span class="fu">__builtin_calltarget</span><span class="op">(</span>my_immovable_type<span class="op">(</span>my_other_immovable_type<span class="op">{}))</span>;</span>
+<span id="cb8-10"><a href="#cb8-10" aria-hidden="true" tabindex="-1"></a><span class="kw">auto</span> y <span class="op">=</span> constructor_pointer<span class="op">(</span>my_other_immovable_type<span class="op">{})</span>;</span>
+<span id="cb8-11"><a href="#cb8-11" aria-hidden="true" tabindex="-1"></a><span class="co">// x and y have no difference in construction.</span></span></code></pre></div>
+<p>The main problem with this is that free functions have a different
+ABI than constructors of aggregates - they would have to expose where to
+construct the arguments in their signatures.</p>
+<p>This paper is not about that, so we leave it for the future.</p>
 <h2 data-number="4.2" id="inventing-destructor-free-forms"><span class="header-section-number">4.2</span> Inventing destructor
 free-forms<a href="#inventing-destructor-free-forms" class="self-link"></a></h2>
 <p>Or, for destructors (this would make smart pointers slightly faster
 and easier to do):</p>
-<div class="sourceCode" id="cb7"><pre class="sourceCode cpp"><code class="sourceCode cpp"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a>std<span class="op">::</span>same_as<span class="op">&lt;</span><span class="dt">void</span><span class="op">(*)(</span>S<span class="op">&amp;)&gt;</span> <span class="kw">auto</span></span>
-<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a>  dtor <span class="op">=</span> <span class="op">[](</span>S<span class="op">*</span> x<span class="op">){</span><span class="cf">return</span> <span class="fu">__builtin_calltarget</span><span class="op">(</span>x<span class="op">-&gt;~</span>S<span class="op">())</span>;<span class="op">}(</span><span class="kw">nullptr</span><span class="op">)</span>;</span>
-<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a>S x;</span>
-<span id="cb7-4"><a href="#cb7-4" aria-hidden="true" tabindex="-1"></a>dtor<span class="op">(</span>x<span class="op">)</span>; <span class="co">// expression-equivalent to x.~S()</span></span></code></pre></div>
+<div class="sourceCode" id="cb9"><pre class="sourceCode cpp"><code class="sourceCode cpp"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a>std<span class="op">::</span>same_as<span class="op">&lt;</span><span class="dt">void</span><span class="op">(*)(</span>S<span class="op">&amp;)&gt;</span> <span class="kw">auto</span></span>
+<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a>  dtor <span class="op">=</span> <span class="op">[](</span>S<span class="op">*</span> x<span class="op">){</span><span class="cf">return</span> <span class="fu">__builtin_calltarget</span><span class="op">(</span>x<span class="op">-&gt;~</span>S<span class="op">())</span>;<span class="op">}(</span><span class="kw">nullptr</span><span class="op">)</span>;</span>
+<span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a>S x;</span>
+<span id="cb9-4"><a href="#cb9-4" aria-hidden="true" tabindex="-1"></a>dtor<span class="op">(</span>x<span class="op">)</span>; <span class="co">// expression-equivalent to x.~S()</span></span></code></pre></div>
 <h2 data-number="4.3" id="inventing-pointers-to-built-in-functions"><span class="header-section-number">4.3</span> Inventing pointers to built-in
 functions<a href="#inventing-pointers-to-built-in-functions" class="self-link"></a></h2>
 <p>We could invent pointers to functions that are otherwise built-in,
 like built-in operators:</p>
-<div class="sourceCode" id="cb8"><pre class="sourceCode cpp"><code class="sourceCode cpp"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a><span class="fu">__builtin_calltarget</span><span class="op">(</span><span class="dv">1</span><span class="op">+</span><span class="dv">1</span><span class="op">)</span>; <span class="co">// &amp;::operator+(int, int)</span></span></code></pre></div>
+<div class="sourceCode" id="cb10"><pre class="sourceCode cpp"><code class="sourceCode cpp"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a><span class="fu">__builtin_calltarget</span><span class="op">(</span><span class="dv">1</span><span class="op">+</span><span class="dv">1</span><span class="op">)</span>; <span class="co">// &amp;::operator+(int, int)</span></span></code></pre></div>
 <h1 data-number="5" id="usecases"><span class="header-section-number">5</span> Usecases<a href="#usecases" class="self-link"></a></h1>
 <p>Broadly, anywhere where we want to type-erase a call-expression.
 Broad uses in any type-erasure library, smart pointers, ABI-stable
@@ -745,7 +774,8 @@ without accurate type information from the user.</li>
 all that work. What else?<a href="#thats-not-good-enough-to-do-all-that-work.-what-else" class="self-link"></a></h2>
 <p>Together with <span class="citation" data-cites="P2826R0">[<a href="#ref-P2826R0" role="doc-biblioref">P2826R0</a>]</span>, the two
 papers constitute the ability to implement
-<em>expression-equivalent</em>.</p>
+<em>expression-equivalent</em> in many important cases (not all, that’s
+probably impossible).</p>
 <p><span class="citation" data-cites="P2826R0">[<a href="#ref-P2826R0" role="doc-biblioref">P2826R0</a>]</span> proposes a way for a function
 signature to participate in overload resolution and, if it wins, be
 replaced by some other function.</p>
