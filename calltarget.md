@@ -1,6 +1,6 @@
 ---
-title: "calltarget(unevaluated-call-expression)"
-document: D2825R0
+title: "declcall(unevaluated-postfix-expression)"
+document: P2825R1
 date: today
 audience:
   - EWG
@@ -14,13 +14,14 @@ toc-depth: 2
 # Introduction
 
 This paper introduces a new compile-time expression into the language, for the
-moment with the syntax `__builtin_calltarget(@_postfix-expression_@)`.
+moment with the syntax `declcall(@_postfix-expression_@)`.
 
-The expression is a compile-time constant with the value of the
-pointer-to-function (PF) or pointer-to-member-function (PMF) that *would have
-been called* if the `@_postfix-expression_@` had been evaluated.
+The expression is a constant expression of the type pointer-to-function
+(PF) or pointer-to-member-function (PMF). Its value is the pointer to the
+function that would have been invoked if the @_postfix-expression_@ were evaluated.
+The @_postfix-expression_@ itself is an unevaluated operand.
 
-In that, it's basically a compile-time resolver.
+In effect, `declcall` is a hook into the overload resolution machinery.
 
 # Motivation and Prior Art
 
@@ -64,23 +65,29 @@ This is what this paper is trying to provide.
 
 ### Reflection
 
-Of course, reflection would give us this. However, reflection
-([@P2320R0],[@P1240R1],[@P2237R0],[@P2087R0],[@N4856]) is both nowhere close to
-shipping, and is far wider in scope as another `decltype`-ish proposal that's
-easily implementable today, and `std::execution` could use immediately.
+The reflection proposal includes `reflect_invoke`, which would allow one to do
+the same thing, but with more work to get the actual pointer. We probably need
+to do the specification work of this paper to understand the corner cases of
+`reflect_invoke`.
+
+However, reflection ([@P2320R0],[@P1240R1],[@P2237R0],[@P2087R0],[@N4856]) is
+might miss C++26, and is far wider in scope as another `decltype`-ish proposal
+that's easily implementable today, and `std::execution` could use immediately.
 
 Regardless of how we chose to provide this facility, it is dearly needed, and
 should be provided by the standard library or a built-in.
 
 See the [Alternatives to Syntax](#alternatives-to-syntax) chapter for details.
 
+
 ### Library fundamentals TS v3
 
 The [Library Fundamentals TS version 3](https://cplusplus.github.io/fundamentals-ts/v3.html#meta.trans.other)
-defines `invocation_type<F(Args...)` and `raw_invocation_type<F(Args...)>` with
+defines `invocation_type<F(Args...)>` and `raw_invocation_type<F(Args...)>` with
 the hope of getting the function pointer type of a given call expression. 
 
-However, this is not good enough to actually be able to perform that call.
+However, this is not good enough to actually be able to resolve that call in
+all cases.
 
 Observe:
 
@@ -93,9 +100,9 @@ void h() {
   static_cast<void(*)(S)>(S::f) // error, ambiguous
   S{}.f(S{}); // calls #1
   S{}.f(); // calls #2
-  // no ambiguity for __builtin_calltarget
-  __builtin_calltarget(S{}.f(S{})); // &#1
-  __builtin_calltarget(S{}.f());    // &#2
+  // no ambiguity for declcall
+  declcall(S{}.f(S{})); // &#1
+  declcall(S{}.f());    // &#2
 }
 ```
 
@@ -107,14 +114,63 @@ reflect on unevaluated operands (which Reflection does).
 We propose a new (technically) non-overloadable operator (because `sizeof` is
 one, and this behaves similarly):
 
-(strawman syntax)
-
 ```cpp
-auto fptr = __builtin_calltarget(@_expression_@);
+declcall(@_postfix-expression_@);
 ```
 
-Where the program is ill-formed if `@_expression_@` does not call a function as
-its top-level AST-node (good luck to me wording this).
+Example:
+
+```cpp
+int f(int);  // 1
+int f(long); // 2
+constexpr auto fptr_to_1 = declcall(f(2));
+constexpr auto fptr_to_2 = declcall(f(2l));
+```
+
+The program is ill-formed if the named `@_postfix-expression_@` is not a call
+to an addressable function (such as a constructor, destructor, built-in, etc.).
+
+```cpp
+struct S {};
+declcall(S()); // Error, constructors are not addressable
+declcall(__builtin_unreachable()); // Error, not addressable
+```
+
+The expression is not a constant expression if the `@_postfix-expression_@`
+does not resolve for unevaluated operands. Examples of this function pointer
+values and surrogate functions.
+
+```cpp
+int f(int);
+using fptr_t = int (*)(int);
+constexpr fptr_t fptr = declcall(f(2));
+declcall(fptr(2)); // Error, fptr_to_1 is a pointer value
+struct T {
+    constexpr operator fptr_t() const { return fptr; }
+};
+declcall(T{}(2)); // Error, T{} would need to be evaluated
+```
+
+If the `declcall(@_postfix-expression_@)` is evaluated and not a constant
+expression, the program is ill-formed (but SFINAE-friendly).
+
+However, if it is unevaluated, it's not an error.
+
+Example:
+
+```cpp
+int f(int);
+using fptr_t = int (*)(int);
+constexpr fptr_t fptr = declcall(f(2));
+static_cast<declcall(fptr(2))>(fptr); // OK, fptr, though redundant
+struct T {
+    constexpr operator fptr_t() const { return fptr; }
+};
+static_cast<declcall(T{}(2))>(T{}); // OK, fptr
+```
+
+This pattern covers all cases that need evaluated base operands, while making
+it explicit that the operand is evaluated due to the static cast.
 
 Examples:
 
@@ -134,7 +190,7 @@ struct S {
   auto operator[](this auto&& self, int i) -> int;         // #11
   static auto f(S) -> int;                                 // #12
   using fptr = void(*)(long);
-  auto operator void(*)() const { return &g; }             // #13
+  auto operator fptr const { return &g; }                  // #13
   auto operator<=>(S const&) = default;                    // #14
 };
 S f(int, long) { return S{}; }                             // #15
@@ -143,33 +199,34 @@ struct U : S {}
 void h() {
   S s;
   U u;
-  __builtin_calltarget(f());                     // ok, &#1             (A)
-  __builtin_calltarget(f(1));                    // ok, &#2             (B)
-  __builtin_calltarget(f(std::declval<int>()));  // ok, &#2             (C)
-  __builtin_calltarget(f(1s));                   // ok, &#2 (!)         (D)
-  __builtin_calltarget(s + s);                   // ok, &#3             (E)
-  __builtin_calltarget(-s);                      // ok, &#4             (F)
-  __builtin_calltarget(-u);                      // ok, &#4 (!)         (G)
-  __builtin_calltarget(s - s);                   // ok, &#5             (H)
-  __builtin_calltarget(s.f());                   // ok, &#6             (I)
-  __builtin_calltarget(u.f());                   // ok, &#6 (!)         (J)
-  __builtin_calltarget(s.f(2));                  // ok, &#7             (K)
-  __builtin_calltarget(s);                       // error, constructor  (L)
-  __builtin_calltarget(s.S::~S());               // error, destructor   (M)
-  __builtin_calltarget(s->f());                  // ok, &#6 (not &#10)  (N)
-  __builtin_calltarget(s.S::operator->());       // ok, &#10            (O)
-  __builtin_calltarget(s[1]);                    // ok, &#11            (P)
-  __builtin_calltarget(S::f(S{}));               // ok, &#12            (Q)
-  __builtin_calltarget(s.f(S{}));                // ok, &#12            (R)
-  __builtin_calltarget(s(1l));                   // ok, &#13            (S)
-  __builtin_calltarget(f(1, 2));                 // ok, &#15            (T)
-  __builtin_calltarget(new (nullptr) S());       // error, not function (U)
-  __builtin_calltarget(delete &s);               // error, not function (V)
-  __builtin_calltarget(1 + 1);                   // error, built-in     (W)
-  __builtin_calltarget([]{
-       return __builtin_calltarget(f());
+  declcall(f());                     // ok, &#1             (A)
+  declcall(f(1));                    // ok, &#2             (B)
+  declcall(f(std::declval<int>()));  // ok, &#2             (C)
+  declcall(f(1s));                   // ok, &#2 (!)         (D)
+  declcall(s + s);                   // ok, &#3             (E)
+  declcall(-s);                      // ok, &#4             (F)
+  declcall(-u);                      // ok, &#4 (!)         (G)
+  declcall(s - s);                   // ok, &#5             (H)
+  declcall(s.f());                   // ok, &#6             (I)
+  declcall(u.f());                   // ok, &#6 (!)         (J)
+  declcall(s.f(2));                  // ok, &#7             (K)
+  declcall(s);                       // error, constructor  (L)
+  declcall(s.S::~S());               // error, destructor   (M)
+  declcall(s->f());                  // ok, &#6 (not &#10)  (N)
+  declcall(s.S::operator->());       // ok, &#10            (O)
+  declcall(s[1]);                    // ok, &#11            (P)
+  declcall(S::f(S{}));               // ok, &#12            (Q)
+  declcall(s.f(S{}));                // ok, &#12            (R)
+  declcall(s(1l));                   // error, #13          (S)
+  static_cast<declcall(s(1l)>(s));   // ok, &13             (S)
+  declcall(f(1, 2));                 // ok, &#15            (T)
+  declcall(new (nullptr) S());       // error, not function (U)
+  declcall(delete &s);               // error, not function (V)
+  declcall(1 + 1);                   // error, built-in     (W)
+  declcall([]{
+       return declcall(f());
     }()());                                      // ok, &2              (X)
-  __builtin_calltarget(S{} < S{});               // error, synthesized  (Y)
+  declcall(S{} < S{});               // error, synthesized  (Y)
 }
 ```
 
@@ -187,7 +244,8 @@ void h() {
   postfix-expression is the call to `f()`, and not the `->`. To get to
   `S::operator->`, we have to ask for it explicitly.
 - surrogate function call (S) - again, the top-most call-expression is the
-  function call to `g`, so that is what is returned.
+  function call to `g`, so the type of `g` is returned, but it's not a constant expression.
+  We can get it by evaluating the operand with `static_cast`.
 - nested calls: (X) the top-level call is a call to a function-pointer to #2,
   so that is what is returned.
 - Synthesized operators (Y) - these are not functions that we can take pointers
@@ -196,11 +254,12 @@ void h() {
 
 ## Alternatives to syntax
 
-We could wait for reflection in which case we could write `call_target` roughly as
+We could wait for reflection in which case `declcall` is implementable when we
+have expression reflections.
 
 ```cpp
 namespace std::meta {
-  template<info r> constexpr auto call_target = []{
+  template<info r> constexpr auto declcall = []{
     if constexpr (is_nonstatic_member(r)) {
       return pointer_to_member<[:pm_type_of(r):]>(r);
     } else {
@@ -208,12 +267,10 @@ namespace std::meta {
     } /* insert additional cases as we define them. */
   }();
 }
-```
 
-And call it as
-
-```cpp
-auto my_expr_ptr = call_target<^f()>;
+int f(int); //1 
+int f(long); //2
+constexpr auto fptr_1 = [: declcall<^f(1)> :]; // 1
 ```
 
 It's unlikely to be quite as efficient as just hooking directly into the
@@ -224,82 +281,22 @@ Many thanks to Daveed Vandevoorde for helping out with this example.
 
 ## Naming
 
-### Grabbing a pattern
-
-A suggestion of an esteemed former EWG chair is that we, as a committee, grab
-the keyword-space prefix `__std_meta_*` and have all the functions with that
-prefix have unevaluated arguments.
-
-In that case, this proposal becomes
-
-```cpp
-__std_meta_calltarget(@_unevaluated-expression_@);
-```
-
-This is done so as to stop wringing our hands about function-like APIs that
-have unevaluated operands, and going for less appropriate solutions for want of a function.
-The naming itself signals that it's not a normal function. Its address also
-can't be taken, it behaves as-if `consteval`.
-
-It's ugly on purpose. That's by design. It's not meant to be pretty.
-
-### Possible names
+I think `declcall` is a reasonable name - it hints that it's an unevaluated
+operand, and it's how I implemented it in clang.
 
 For all intents and purposes, this facility grammatically behaves in the same
 way as `sizeof`, except that we should require the parentheses around the
 operand.
 
 We could call it something really long and unlikely to conflict, like
-`expression_targetof`, or `calltargetof` or `decltargetof` or `targetexpr` or
-`resolvetarget`.
 
-# Possible Extensions
-
-We could make compilers invent functions for the cases that currently aren't legal.
-
-## Inventing contructor free-functions
-
-For instance, constructor calls could "invent" a free function that is
-expression-equivalent to calling placement new on the return object:
-
-```cpp
-// immovable aggregate
-struct my_immovable_type {
-  my_other_immovable_type x;
-  some_immovable_type y = {};
-};
-my_immovable_type x(my_other_immovable_type{});
-// note: prvalue parameters in type, since in-place construction through copy-elision is possible
-std::same_as<my_immovable_type(*)(my_other_immovable_type, some_immovable_type)> 
-  auto constructor_pointer = __builtin_calltarget(my_immovable_type(my_other_immovable_type{}));
-auto y = constructor_pointer(my_other_immovable_type{});
-// x and y have no difference in construction.
-```
-
-The main problem with this is that free functions have a different ABI than
-constructors of aggregates - they would have to expose where to construct the
-arguments in their signatures.
-
-This paper is not about that, so we leave it for the future.
-
-## Inventing destructor free-forms
-
-Or, for destructors (this would make smart pointers slightly faster and easier to do):
-
-```cpp
-std::same_as<void(*)(S&)> auto
-  dtor = [](S* x){return __builtin_calltarget(x->~S());}(nullptr);
-S x;
-dtor(x); // expression-equivalent to x.~S()
-```
-
-## Inventing pointers to built-in functions
-
-We could invent pointers to functions that are otherwise built-in, like built-in operators:
-
-```cpp
-__builtin_calltarget(1+1); // &::operator+(int, int)
-```
+- `declcall`
+- `declinvoke`
+- `calltarget`
+- `expression_targetof`
+- `calltargetof`
+- `decltargetof`
+- `resolvetarget`
 
 # Usecases
 
@@ -310,12 +307,57 @@ and on and on and ...
 
 ## What does this give us that we don't have yet
 
-Two things, mainly:
+### Resolving overload sets for callbacks without lambdas
 
-- no need for indirection through a lambda when resolving overlaod sets
-- ... which allows us to use copy-elision to construct function arguments in
-  type-erased interfaces, which is currently impossible without accurate type
-  information from the user.
+```cpp
+// generic context
+std::sort(v.begin(), v.end(), [](auto const& x, auto const& y) {
+    return my_comparator(x, y); // some overload set
+});
+```
+
+becomes
+
+```cpp
+// look ma, no lambda, no inlining, and less code generation!
+std::sort(v.begin(), v.end(), declcall(my_comparator(v.front(), v.front()));
+```
+
+Note also, that in the case of a `vector<int>`, the ABI for the comparator is
+likely to take those by value, which means we get a better calling convention.
+
+`static_cast<bool(*)(int, int)>(my_comparator)` is not good enough here - the
+resolved comparator could take `long`s, for instance.
+
+### Copy-elision in callbacks
+
+We cannot correctly forward immovable type construction through forwarding
+function.
+
+Example:
+
+```cpp
+int f(nonmovable) { /* ... */ }
+struct {
+    // doesn't work
+    static auto operator()(auto&& obj) const {
+        return f(std::forward<decltype(obj)>(obj)); // 1
+    }
+    // would work if we also had replacement function / expression aliases
+    static auto operator()(auto&& obj) const 
+       = declcall(f(std::forward<obj>(obj)));      // 2
+} some_customization_point_object;
+
+void continue_with_result(auto callback) {
+    callback(nonmovable{read_something()});
+}
+
+void handler() {
+    continue_with_result(declcall(f(nonmovable{}))); // works
+    // (1) doesn't work, (2) works
+    continue_with_result(some_customization_point_object);
+}
+```
 
 ## That's not good enough to do all that work. What else?
 
@@ -330,6 +372,14 @@ This facility is the key to *finding* that other function. The ability to
 preserve prvalue-ness is crucial to implementing quite a lot of the standard
 library customization points as mandated by the standard, without compiler
 help.
+
+# Needed Guidance
+
+- Do we want to punt the syntax to reflection, or is this basic enough to warrant
+  this feature? (Knowing that reflection will need more work from the user to
+  get the pointer value).
+- Do we care that it only works on unevaluated operands? (With the
+  `static_cast` fallback in run-time cases)
 
 
 ---
