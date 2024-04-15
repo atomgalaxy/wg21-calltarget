@@ -14,12 +14,12 @@ toc-depth: 2
 # Introduction
 
 This paper introduces a new compile-time expression into the language, for the
-moment with the syntax `declcall(@_postfix-expression_@)`.
+moment with the syntax `declcall(@_expression_@)`.
 
-The expression is a constant expression of the type pointer-to-function
+The `declcall` expression is a constant expression of the type pointer-to-function
 (PF) or pointer-to-member-function (PMF). Its value is the pointer to the
-function that would have been invoked if the @_postfix-expression_@ were evaluated.
-The @_postfix-expression_@ itself is an unevaluated operand.
+function that would have been invoked if the @_expression_@ were evaluated.
+The @_expression_@ itself is an unevaluated operand.
 
 In effect, `declcall` is a hook into the overload resolution machinery.
 
@@ -65,12 +65,14 @@ This is what this paper is trying to provide.
 
 ### Reflection
 
-The reflection proposal includes `reflect_invoke`, which would allow one to do
-the same thing, but with more work to get the actual pointer. We probably need
-to do the specification work of this paper to understand the corner cases of
-`reflect_invoke`.
+The reflection proposal does not include anything like this. It knows how to
+reflect on constants, but a general-purpose feature like this is beyond its
+reach. Source: hallway discussion with Daveed Vandevoorde.
 
-However, reflection ([@P2320R0],[@P1240R1],[@P2237R0],[@P2087R0],[@N4856]) is
+We probably need to do the specification work of this paper to understand the
+corner cases of even trying to do this with reflection.
+
+Reflection ([@P2320R0],[@P1240R1],[@P2237R0],[@P2087R0],[@N4856])
 might miss C++26, and is far wider in scope as another `decltype`-ish proposal
 that's easily implementable today, and `std::execution` could use immediately.
 
@@ -115,7 +117,7 @@ We propose a new (technically) non-overloadable operator (because `sizeof` is
 one, and this behaves similarly):
 
 ```cpp
-declcall(@_postfix-expression_@);
+declcall(@_expression_@);
 ```
 
 Example:
@@ -136,7 +138,7 @@ declcall(S()); // Error, constructors are not addressable
 declcall(__builtin_unreachable()); // Error, not addressable
 ```
 
-The expression is not a constant expression if the `@_postfix-expression_@`
+The expression is not a constant expression if the `@_expression_@`
 does not resolve for unevaluated operands. Examples of this function pointer
 values and surrogate functions.
 
@@ -151,7 +153,7 @@ struct T {
 declcall(T{}(2)); // Error, T{} would need to be evaluated
 ```
 
-If the `declcall(@_postfix-expression_@)` is evaluated and not a constant
+If the `declcall(@_expression_@)` is evaluated and not a constant
 expression, the program is ill-formed (but SFINAE-friendly).
 
 However, if it is unevaluated, it's not an error.
@@ -170,7 +172,7 @@ static_cast<declcall(T{}(2))>(T{}); // OK, fptr
 ```
 
 This pattern covers all cases that need evaluated base operands, while making
-it explicit that the operand is evaluated due to the static cast.
+it explicit that the operand is evaluated due to the `static_cast`.
 
 Examples:
 
@@ -225,7 +227,7 @@ void h() {
   declcall(1 + 1);                   // error, built-in     (W)
   declcall([]{
        return declcall(f());
-    }()());                                      // ok, &2              (X)
+    }()());                          // error (unevaluated) (X)
   declcall(S{} < S{});               // error, synthesized  (Y)
 }
 ```
@@ -247,7 +249,8 @@ void h() {
   function call to `g`, so the type of `g` is returned, but it's not a constant expression.
   We can get it by evaluating the operand with `static_cast`.
 - nested calls: (X) the top-level call is a call to a function-pointer to #2,
-  so that is what is returned.
+  so that is what is returned, but since obtaining the value of the function pointer
+  requires evaluation, this is ill-formed. Getting the type is fine.
 - Synthesized operators (Y) - these are not functions that we can take pointers
   to, so unless we "force-manufacture" one, we can't make this work.
 
@@ -277,6 +280,11 @@ It's unlikely to be quite as efficient as just hooking directly into the
 resolver, but it does have the nice property that it doesn't take up a whole
 keyword.
 
+It *also* currently only works for constant expressions, so it's not
+general-purpose. For general arguments, one would need to pass reflections of
+arguments, and if those aren't constant expressions, this gets really
+complicated. `declcall` is far simpler.
+
 Many thanks to Daveed Vandevoorde for helping out with this example.
 
 ## Naming
@@ -284,11 +292,14 @@ Many thanks to Daveed Vandevoorde for helping out with this example.
 I think `declcall` is a reasonable name - it hints that it's an unevaluated
 operand, and it's how I implemented it in clang.
 
+[codesearch for declcall](https://codesearch.isocpp.org/cgi-bin/cgi_ppsearch?q=declcall&search=Search)
+comes up with zero hits.
+
 For all intents and purposes, this facility grammatically behaves in the same
 way as `sizeof`, except that we should require the parentheses around the
 operand.
 
-We could call it something really long and unlikely to conflict, like
+We could call it something other unlikely to conflict, but I like `declcall`
 
 - `declcall`
 - `declinvoke`
