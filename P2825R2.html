@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="generator" content="mpark/wg21" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
-  <meta name="dcterms.date" content="2024-04-15" />
+  <meta name="dcterms.date" content="2024-04-16" />
   <title>declcall(unevaluated-postfix-expression)</title>
   <style>
       code{white-space: pre-wrap;}
@@ -427,7 +427,7 @@ code.sourceCode > span { display: inline; }
   </tr>
   <tr>
     <td>Date:</td>
-    <td>2024-04-15</td>
+    <td>2024-04-16</td>
   </tr>
   <tr>
     <td style="vertical-align:top">Project:</td>
@@ -484,9 +484,8 @@ language, for the moment with the syntax
 <p>The <code class="sourceCode default">declcall</code> expression is a
 constant expression of the type pointer-to-function (PF) or
 pointer-to-member-function (PMF). Its value is the pointer to the
-function that would have been invoked if the <span class="citation" data-cites="_expression_">[<a href="#ref-_expression_" role="doc-biblioref"><strong>_expression_?</strong></a>]</span>@ were
-evaluated. The <span class="citation" data-cites="_expression_">[<a href="#ref-_expression_" role="doc-biblioref"><strong>_expression_?</strong></a>]</span>@ itself
-is an unevaluated operand.</p>
+function that would have been invoked if the <em>expression</em> were
+evaluated. The <em>expression</em> itself is an unevaluated operand.</p>
 <p>In effect, <code class="sourceCode default">declcall</code> is a hook
 into the overload resolution machinery.</p>
 <h1 data-number="2" id="motivation-and-prior-art"><span class="header-section-number">2</span> Motivation and Prior Art<a href="#motivation-and-prior-art" class="self-link"></a></h1>

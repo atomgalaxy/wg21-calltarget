@@ -18,8 +18,8 @@ moment with the syntax `declcall(@_expression_@)`.
 
 The `declcall` expression is a constant expression of the type pointer-to-function
 (PF) or pointer-to-member-function (PMF). Its value is the pointer to the
-function that would have been invoked if the @_expression_@ were evaluated.
-The @_expression_@ itself is an unevaluated operand.
+function that would have been invoked if the _expression_ were evaluated.
+The _expression_ itself is an unevaluated operand.
 
 In effect, `declcall` is a hook into the overload resolution machinery.
 
