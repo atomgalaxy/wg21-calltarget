@@ -1,6 +1,6 @@
 ---
 title: "declcall(unevaluated-postfix-expression)"
-document: P2825R1
+document: P2825R3
 date: today
 audience:
   - EWG
@@ -13,10 +13,9 @@ toc-depth: 2
 
 # Introduction
 
-This paper introduces a new compile-time expression into the language, for the
-moment with the syntax `declcall(@_expression_@)`.
+This paper introduces a new expression into the language `declcall(@_expression_@)`.
 
-The `declcall` expression is a constant expression of the type pointer-to-function
+The `declcall` expression is a constant expression of type pointer-to-function
 (PF) or pointer-to-member-function (PMF). Its value is the pointer to the
 function that would have been invoked if the _expression_ were evaluated.
 The _expression_ itself is an unevaluated operand.
@@ -31,30 +30,39 @@ The language already has a number of sort-of overload resolution facilities:
 - assignment to a variable of a given function pointer type
 - function calls (implicit) - the only one that actually works
 
-All of these are woefully unsuitable for type-erasure that library authors
-(such as [@P2300R6]) would actually *like* to work with. Sure, we can always
-indirect through a lambda:
+All of these are unsuitable for ad-hoc type-erasure that library authors
+(such as [@P2300R6]) need.
+
+We can sometimes indirect through a lambda to "remember" the result of an
+overload resolution to be invoked later:
 
 ```cpp
 template <typename R, typename Args...>
 struct my_erased_wrapper {
-  using fptr = R(*)(Args_...);
-  fptr erased = +[](my_erased_wrapper* self, auto&&... args_) -> R {
-    return self->fptr(std::forward<decltype>(args_)...);
-  };
+  using fptr_t = R(*)(Args_...);
+  fptr_t erased;
+};
+// for some types R, T1, T2, T3
+my_erased_wrapper<R, T1, T2, T3> vtable = {
+    +[](T1 a, T2 b, T3 c) -> R { return some_f(FWD(a), FWD(b), FWD(c)); }
 };
 ```
 
-This has several drawbacks:
+... however, this does not work in all cases, and has suboptimal code generation.
 
 - it introduces a whole new lambda scope
-  - annoying for optimizers because extra inlining
-  - annoying for debugging because of an extra stack frame
-- a requirement to divine forward noexceptness by the user,
-- a requirement that arguments are *convertible* (but not necessarily the same) as the ones the user specified in their infinite wisdom,
-- a requirement that the return type is convertible (but not necessarily the same) as the one the user specified in their infinite wisdom,
-- the forward-through-a-reference inhibits copy-elision of arguments
-- inability to flatten subsetting type-erased wrappers (we can't divine an
+  - expensive for optimizers because extra inlining
+  - annoyint for debugging because of an extra stack frame
+  - decays arguments prematurely or reifies prvalues both of which inhibit copy-elision
+- it places additional unwelcome requirements on the programmer, who must:
+    - divine the correct `noexcept(which?)`
+    - explicitly (and correctly) spell the return type of the erased function
+    - explicitly (and correctly) spell out the exact parameter types of the forwarded function
+- if one fails to do the above, one must at least enusre that
+    - arguments are convertible
+    - return type is convertible
+    - ... both of which result in suboptimal codegen
+- Nested erasures do not flatten: we cannot subset type-erased wrappers (we can't divine an
   exact match in the presence of overloads) (think "subsetting vtables")
 
 Oh, if only we had a facility to ask the compiler what function we'd be calling and then *just have the pointer to it*.
@@ -138,15 +146,15 @@ declcall(S()); // Error, constructors are not addressable
 declcall(__builtin_unreachable()); // Error, not addressable
 ```
 
-The expression is not a constant expression if the `@_expression_@`
-does not resolve for unevaluated operands. Examples of this function pointer
-values and surrogate functions.
+The expression is not a constant expression if the `@_expression_@` does not
+resolve for unevaluated operands, such as with function pointer values and
+surrogate functions.
 
 ```cpp
 int f(int);
 using fptr_t = int (*)(int);
-constexpr fptr_t fptr = declcall(f(2));
-declcall(fptr(2)); // Error, fptr_to_1 is a pointer value
+constexpr fptr_t fptr = declcall(f(2)); // OK
+declcall(fptr(2)); // Error, fptr_to_1 is a pointer
 struct T {
     constexpr operator fptr_t() const { return fptr; }
 };
@@ -156,7 +164,8 @@ declcall(T{}(2)); // Error, T{} would need to be evaluated
 If the `declcall(@_expression_@)` is evaluated and not a constant
 expression, the program is ill-formed (but SFINAE-friendly).
 
-However, if it is unevaluated, it's not an error.
+However, if it is unevaluated, it's not an error, because the type of the
+expression is useful as the type argument to `static_cast`!
 
 Example:
 
@@ -171,8 +180,11 @@ struct T {
 static_cast<declcall(T{}(2))>(T{}); // OK, fptr
 ```
 
-This pattern covers all cases that need evaluated base operands, while making
+This pattern covers all cases that need evaluated operands, while making
 it explicit that the operand is evaluated due to the `static_cast`.
+
+This division of labor is important - we do not want a language facility where
+the operand is conditionally evaluated or unevaluated.
 
 Examples:
 
@@ -350,13 +362,17 @@ Example:
 ```cpp
 int f(nonmovable) { /* ... */ }
 struct {
+    #if __cpp_expression_aliases < 202506
     // doesn't work
     static auto operator()(auto&& obj) const {
         return f(std::forward<decltype(obj)>(obj)); // 1
     }
-    // would work if we also had replacement function / expression aliases
+    #else
+    // would work if we also had expression aliases
     static auto operator()(auto&& obj) const 
        = declcall(f(std::forward<obj>(obj)));      // 2
+    #endif
+
 } some_customization_point_object;
 
 void continue_with_result(auto callback) {
@@ -384,13 +400,25 @@ preserve prvalue-ness is crucial to implementing quite a lot of the standard
 library customization points as mandated by the standard, without compiler
 help.
 
-# Needed Guidance
+# Guidance Given:
 
-- Do we want to punt the syntax to reflection, or is this basic enough to warrant
-  this feature? (Knowing that reflection will need more work from the user to
-  get the pointer value).
-- Do we care that it only works on unevaluated operands? (With the
-  `static_cast` fallback in run-time cases)
+## Reflection?
+
+**Do we want to punt the syntax to reflection, or is this basic enough to warrant
+this feature? (Knowing that reflection will need more work from the user to get
+the pointer value).**
+
+SG7 said no, this is good. So has EWG.
+
+
+## Unevaluated operands only?
+
+**Do we care that it only works on unevaluated operands? (With the `static_cast` fallback in run-time cases)**
+
+SG7 confirmed author's position that this is the correct design, and so has EWG.
+
+# Proposed wording
+
 
 
 ---
