@@ -1,9 +1,10 @@
 ---
-title: "declcall(unevaluated-postfix-expression)"
-document: P2825R3
+title: "Overload resolution hook: declcall( unevaluated-call-expression )"
+document: D2825R3
 date: today
 audience:
   - EWG
+  - CWG
 author:
   - name: Gašper Ažman
     email: <gasper.azman@gmail.com>
@@ -34,7 +35,8 @@ All of these are unsuitable for ad-hoc type-erasure that library authors
 (such as [@P2300R6]) need.
 
 We can sometimes indirect through a lambda to "remember" the result of an
-overload resolution to be invoked later:
+overload resolution to be invoked later, if the function pointer type is not a
+perfect match:
 
 ```cpp
 template <typename R, typename Args...>
@@ -52,13 +54,13 @@ my_erased_wrapper<R, T1, T2, T3> vtable = {
 
 - it introduces a whole new lambda scope
   - expensive for optimizers because extra inlining
-  - annoyint for debugging because of an extra stack frame
+  - annoying for debugging because of an extra stack frame
   - decays arguments prematurely or reifies prvalues both of which inhibit copy-elision
 - it places additional unwelcome requirements on the programmer, who must:
     - divine the correct `noexcept(which?)`
     - explicitly (and correctly) spell the return type of the erased function
     - explicitly (and correctly) spell out the exact parameter types of the forwarded function
-- if one fails to do the above, one must at least enusre that
+- if one fails to do the above, one must at least ensure that
     - arguments are convertible
     - return type is convertible
     - ... both of which result in suboptimal codegen
@@ -244,6 +246,8 @@ void h() {
 }
 ```
 
+TODO: call out difference between `declcall(obj.f())` and `declcall(obj.Base::f())` for virtual f.
+
 ## Interesting cases in the above example
 
 - resolving different members of a free-function overload set (A, B, C, D, T)
@@ -266,6 +270,62 @@ void h() {
 - Synthesized operators (Y) - these are not functions that we can take pointers
   to, so unless we "force-manufacture" one, we can't make this work.
 
+
+## Design question about pointers to virtual member functions
+
+This paper is effectively a counterpart to `std::invoke` - give me a pointer to
+the thing that would be invoked by this expression, so I can do it later.
+
+This poses a problem with pointers to virtual member functions obtained via
+explicit access. Observe:
+
+```cpp
+struct B {
+    virtual B* f() { return this; }
+};
+struct D : B {
+    D* f() override { return this; }
+};
+void g() {
+    D d;
+    B& rb = d; // d, but type is ref-to-B
+
+    d.f();    // calls D::f
+    rb.f();   // calls D::f
+    d.B::f(); // calls B::f
+
+    auto pf = &B::f;
+    (d.*pf)(); // calls D::f (!)
+}
+```
+
+This begs the question: should there be a difference between these three expressions?
+
+```cpp
+auto b_f = declcall(d.B::f()); // (1)
+auto rb_f = declcall(rb.f());  // (2)
+auto d_f = declcall(d.f());    // (3)
+```
+
+Their types are not in question. (1) and (2) certainly should have the same type ( `B* (B::*) ()` ), while (3) has type ( `D* (D::*) ()`).
+
+However, what about when we use them?
+
+```cpp
+// (d, rb, b_f, rb_f, d_f as above)
+(d.*rb_f)(); // definitely calls D::f, same as rb.f()
+(d.*d_f)();  // definitely calld D::f, same as d.f()
+(d.*b_f)(); // does it call B::f or D::f?
+```
+
+It is the position of the author that `(x.*declcall(x.Base::f()))()` should
+call `Base::f`, because INVOKE should be a perfect inverse.
+
+However, this kind of pointer to member function currently does not exist,
+although it's trivially implementable. Its type would not be distinguishable
+from the current kind.
+
+EWG should vote on this.
 
 ## Alternatives to syntax
 
@@ -364,12 +424,12 @@ int f(nonmovable) { /* ... */ }
 struct {
     #if __cpp_expression_aliases < 202506
     // doesn't work
-    static auto operator()(auto&& obj) const {
+    static auto operator()(auto&& obj) {
         return f(std::forward<decltype(obj)>(obj)); // 1
     }
     #else
     // would work if we also had expression aliases
-    static auto operator()(auto&& obj) const 
+    static auto operator()(auto&& obj) 
        = declcall(f(std::forward<obj>(obj)));      // 2
     #endif
 
@@ -417,9 +477,113 @@ SG7 said no, this is good. So has EWG.
 
 SG7 confirmed author's position that this is the correct design, and so has EWG.
 
-# Proposed wording
+# Proposed Wording
+
+We base the approach on [expr.call]{- .sref}, which distinguishes calls to lvalues that
+refer to functions, and prvalues of function pointer type. We must then also
+handle operators which resolve to a call to a function.
+
+In the table of keywords, in [lex.key], add
+
+[`declcall`]{.add}
 
 
+In [expr.unary.general]{- .sref}
+
+| _unary-expression_:
+|     ...
+|     `alignof ( @_type-id_@ )`
+|     [`declcall ( @_expression_@ )`]{.add}
+
+
+Add new section under [expr.alignof]{- .sref}, with a stable tag of [expr.declcall].
+
+:::add
+
+[1]{.pnum} The `declcall` operator yields a pointer to the function or member
+function which would be invoked by its _expression_. The operand of `declcall`
+is an unevaluated operand.
+
+[2]{.pnum} If _expression_ is not a function call ([expr.call]{- .sref}),
+but is an expression that is transformed into an equivalent function call
+([over.match.oper]{.sref}/2), replace _expression_ by the transformed
+expression for the remainder of this subclause.
+Otherwise, the program is ill-formed.
+
+Such a (possibly transformed) _expression_ is of the form
+_postfix-expression_ ( _expression-list~opt~_ ).
+
+[3]{.pnum} If _postfix-expression_ is a prvalue of pointer type ([expr.call]{.sref}/1),
+the `declcall` expression yields an unspecified value of the same type as _postfix-expression_,
+and the `declcall` expression shall not be potentially-evaluated.
+
+[4]{.pnum} Otherwise, let the _F_ be the function selected by overload resolution ([over.match.call]{- .sref}).
+
+- [4.1]{.pnum} If _F_ is a surrogate call function
+  ([over.call.object]{.sref}/2), the `declcall` expression yields an
+  unspecified value of type pointer to _F_, and the `declcall` expression shall
+  not be potentially-evaluated.
+- [4.2]{.pnum} Otherwise, if _F_ is a constructor, destructor, synthesized candidate
+  ([expr.rel]{- .sref}, [expr.eq]{- .sref}), or a built-in operator, the program is
+  ill-formed.
+- [4.3]{.pnum} Otherwise, if _F_ is an implicit object member function, the
+  result is a pointer to member function denoting _F_.
+
+  If the _id-expression_ in the class member access expression of this call
+  is a _qualified-id_, the resulting pointer to member function points to _F_,
+  bypassing virtual dispatch (see compare with [expr.call]{.sref}/2).
+
+  \[Example: 
+```
+  struct B { virtual B* f() { return this; } };
+  struct D : B { D* f() override { return this; } };
+  void g() {
+    D d;
+    B& rb = d;
+    auto b_f = declcall(d.B::f()); // type: B* (B::*)() 
+    auto rb_f = declcall(rb.f());  // type: B* (B::*)()
+    auto d_f = declcall(d.f());    // type: D* (D::*)()
+    (d.*b_f)();  // B::f
+    (d.*rb_f)(); // D::f, via virtual dispatch
+    (d.*d_f)();  // D::f, via virtual dispatch
+  }
+```
+  -- end example]
+
+- [4.4]{.pnum} Otherwise, when _F_ is an explicit object member function,
+  static member function, or function, the result is a pointer to _F_.
+- [4.5]{.pnum} Otherwise, the program is ill-formed.
+
+:::
+
+Into [temp.dep.type]{.sref}, add to the end of p10:
+
+- [10.13]{.pnum} denoted by `decltype(@_expression_@)`, where _expression_ is type-dependent.
+- [[10.14]{.pnum} denoted by `declcall(@_expression_@)`, where _expression_ is type-dependent.]{.add}
+
+Into [temp.dep.constexpr]{.sref}, add to list in 2.6:
+
+| ...
+| `noexcept ( @_type-id_@ )`
+| [`declcall ( @_expression_@ )`]{.add}
+
+Add feature-test macro into 17.3.2 [version.syn] in section 2
+
+:::add
+
+```
+#define __cpp_declcall 2025XXL
+```
+
+:::
+
+Modify the index of grammar productions as appropriate to reflect the new grammar production.
+
+
+# Acknowledgements
+
+- Daveed Vandevoorde for many design discussions
+- Joshua Berne, Davis Herring, Barry Revzin, Christoph Meerwald, and Brian Bi for core language review, changes, and suggestions
 
 ---
 references:

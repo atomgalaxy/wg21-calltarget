@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="generator" content="mpark/wg21" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
-  <meta name="dcterms.date" content="2024-12-16" />
+  <meta name="dcterms.date" content="2024-12-15" />
   <title>Overload resolution hook: declcall( unevaluated-call-expression
 )</title>
   <style>
@@ -429,7 +429,7 @@ declcall( unevaluated-call-expression )</h1>
   </tr>
   <tr>
     <td>Date:</td>
-    <td>2024-12-16</td>
+    <td>2024-12-15</td>
   </tr>
   <tr>
     <td style="vertical-align:top">Project:</td>
@@ -464,11 +464,9 @@ Art<span></span></a>
 <ul>
 <li><a href="#interesting-cases-in-the-above-example" id="toc-interesting-cases-in-the-above-example"><span class="toc-section-number">3.1</span> Interesting cases in the above
 example<span></span></a></li>
-<li><a href="#design-question-about-pointers-to-virtual-member-functions" id="toc-design-question-about-pointers-to-virtual-member-functions"><span class="toc-section-number">3.2</span> Design question about pointers to
-virtual member functions<span></span></a></li>
-<li><a href="#alternatives-to-syntax" id="toc-alternatives-to-syntax"><span class="toc-section-number">3.3</span> Alternatives to
+<li><a href="#alternatives-to-syntax" id="toc-alternatives-to-syntax"><span class="toc-section-number">3.2</span> Alternatives to
 syntax<span></span></a></li>
-<li><a href="#naming" id="toc-naming"><span class="toc-section-number">3.4</span> Naming<span></span></a></li>
+<li><a href="#naming" id="toc-naming"><span class="toc-section-number">3.3</span> Naming<span></span></a></li>
 </ul></li>
 <li><a href="#usecases" id="toc-usecases"><span class="toc-section-number">4</span> Usecases<span></span></a>
 <ul>
@@ -484,10 +482,8 @@ that work. What else?<span></span></a></li>
 only?<span></span></a></li>
 </ul></li>
 <li><a href="#proposed-wording" id="toc-proposed-wording"><span class="toc-section-number">6</span> Proposed
-Wording<span></span></a></li>
-<li><a href="#acknowledgements" id="toc-acknowledgements"><span class="toc-section-number">7</span>
-Acknowledgements<span></span></a></li>
-<li><a href="#bibliography" id="toc-bibliography"><span class="toc-section-number">8</span> References<span></span></a></li>
+wording<span></span></a></li>
+<li><a href="#bibliography" id="toc-bibliography"><span class="toc-section-number">7</span> References<span></span></a></li>
 </ul>
 </div>
 <h1 data-number="1" id="introduction"><span class="header-section-number">1</span> Introduction<a href="#introduction" class="self-link"></a></h1>
@@ -511,8 +507,7 @@ facilities:</p>
 <p>All of these are unsuitable for ad-hoc type-erasure that library
 authors (such as <span class="citation" data-cites="P2300R6">[<a href="#ref-P2300R6" role="doc-biblioref">P2300R6</a>]</span>) need.</p>
 <p>We can sometimes indirect through a lambda to “remember” the result
-of an overload resolution to be invoked later, if the function pointer
-type is not a perfect match:</p>
+of an overload resolution to be invoked later:</p>
 <div class="sourceCode" id="cb1"><pre class="sourceCode cpp"><code class="sourceCode cpp"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="kw">template</span> <span class="op">&lt;</span><span class="kw">typename</span> R, <span class="kw">typename</span> Args<span class="op">...&gt;</span></span>
 <span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="kw">struct</span> my_erased_wrapper <span class="op">{</span></span>
 <span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>  <span class="kw">using</span> fptr_t <span class="op">=</span> R<span class="op">(*)(</span>Args_<span class="op">...)</span>;</span>
@@ -528,7 +523,7 @@ generation.</p>
 <li>it introduces a whole new lambda scope
 <ul>
 <li>expensive for optimizers because extra inlining</li>
-<li>annoying for debugging because of an extra stack frame</li>
+<li>annoyint for debugging because of an extra stack frame</li>
 <li>decays arguments prematurely or reifies prvalues both of which
 inhibit copy-elision</li>
 </ul></li>
@@ -542,7 +537,7 @@ function</li>
 <li>explicitly (and correctly) spell out the exact parameter types of
 the forwarded function</li>
 </ul></li>
-<li>if one fails to do the above, one must at least ensure that
+<li>if one fails to do the above, one must at least enusre that
 <ul>
 <li>arguments are convertible</li>
 <li>return type is convertible</li>
@@ -751,70 +746,23 @@ type is fine.</li>
 pointers to, so unless we “force-manufacture” one, we can’t make this
 work.</li>
 </ul>
-<h2 data-number="3.2" id="design-question-about-pointers-to-virtual-member-functions"><span class="header-section-number">3.2</span> Design question about pointers
-to virtual member functions<a href="#design-question-about-pointers-to-virtual-member-functions" class="self-link"></a></h2>
-<p>This paper is effectively a counterpart to
-<code class="sourceCode default">std::invoke</code> - give me a pointer
-to the thing that would be invoked by this expression, so I can do it
-later.</p>
-<p>This poses a problem with pointers to virtual member functions
-obtained via explicit access. Observe:</p>
-<div class="sourceCode" id="cb9"><pre class="sourceCode cpp"><code class="sourceCode cpp"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a><span class="kw">struct</span> B <span class="op">{</span></span>
-<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a>    <span class="kw">virtual</span> B<span class="op">*</span> f<span class="op">()</span> <span class="op">{</span> <span class="cf">return</span> <span class="kw">this</span>; <span class="op">}</span></span>
-<span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a><span class="op">}</span>;</span>
-<span id="cb9-4"><a href="#cb9-4" aria-hidden="true" tabindex="-1"></a><span class="kw">struct</span> D <span class="op">:</span> B <span class="op">{</span></span>
-<span id="cb9-5"><a href="#cb9-5" aria-hidden="true" tabindex="-1"></a>    D<span class="op">*</span> f<span class="op">()</span> <span class="kw">override</span> <span class="op">{</span> <span class="cf">return</span> <span class="kw">this</span>; <span class="op">}</span></span>
-<span id="cb9-6"><a href="#cb9-6" aria-hidden="true" tabindex="-1"></a><span class="op">}</span>;</span>
-<span id="cb9-7"><a href="#cb9-7" aria-hidden="true" tabindex="-1"></a><span class="dt">void</span> g<span class="op">()</span> <span class="op">{</span></span>
-<span id="cb9-8"><a href="#cb9-8" aria-hidden="true" tabindex="-1"></a>    D d;</span>
-<span id="cb9-9"><a href="#cb9-9" aria-hidden="true" tabindex="-1"></a>    B<span class="op">&amp;</span> rb <span class="op">=</span> d; <span class="co">// d, but type is ref-to-B</span></span>
-<span id="cb9-10"><a href="#cb9-10" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb9-11"><a href="#cb9-11" aria-hidden="true" tabindex="-1"></a>    d<span class="op">.</span>f<span class="op">()</span>;    <span class="co">// calls D::f</span></span>
-<span id="cb9-12"><a href="#cb9-12" aria-hidden="true" tabindex="-1"></a>    rb<span class="op">.</span>f<span class="op">()</span>;   <span class="co">// calls D::f</span></span>
-<span id="cb9-13"><a href="#cb9-13" aria-hidden="true" tabindex="-1"></a>    d<span class="op">.</span>B<span class="op">::</span>f<span class="op">()</span>; <span class="co">// calls B::f</span></span>
-<span id="cb9-14"><a href="#cb9-14" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb9-15"><a href="#cb9-15" aria-hidden="true" tabindex="-1"></a>    <span class="kw">auto</span> pf <span class="op">=</span> <span class="op">&amp;</span>B<span class="op">::</span>f;</span>
-<span id="cb9-16"><a href="#cb9-16" aria-hidden="true" tabindex="-1"></a>    <span class="op">(</span>d<span class="op">.*</span>pf<span class="op">)()</span>; <span class="co">// calls D::f (!)</span></span>
-<span id="cb9-17"><a href="#cb9-17" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
-<p>This begs the question: should there be a difference between these
-three expressions?</p>
-<div class="sourceCode" id="cb10"><pre class="sourceCode cpp"><code class="sourceCode cpp"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a><span class="kw">auto</span> b_f <span class="op">=</span> declcall<span class="op">(</span>d<span class="op">.</span>B<span class="op">::</span>f<span class="op">())</span>; <span class="co">// (1)</span></span>
-<span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a><span class="kw">auto</span> rb_f <span class="op">=</span> declcall<span class="op">(</span>rb<span class="op">.</span>f<span class="op">())</span>;  <span class="co">// (2)</span></span>
-<span id="cb10-3"><a href="#cb10-3" aria-hidden="true" tabindex="-1"></a><span class="kw">auto</span> d_f <span class="op">=</span> declcall<span class="op">(</span>d<span class="op">.</span>f<span class="op">())</span>;    <span class="co">// (3)</span></span></code></pre></div>
-<p>Their types are not in question. (1) and (2) certainly should have
-the same type ( <code class="sourceCode default">B* (B::*) ()</code> ),
-while (3) has type (
-<code class="sourceCode default">D* (D::*) ()</code>).</p>
-<p>However, what about when we use them?</p>
-<div class="sourceCode" id="cb11"><pre class="sourceCode cpp"><code class="sourceCode cpp"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a><span class="co">// (d, rb, b_f, rb_f, d_f as above)</span></span>
-<span id="cb11-2"><a href="#cb11-2" aria-hidden="true" tabindex="-1"></a><span class="op">(</span>d<span class="op">.*</span>rb_f<span class="op">)()</span>; <span class="co">// definitely calls D::f, same as rb.f()</span></span>
-<span id="cb11-3"><a href="#cb11-3" aria-hidden="true" tabindex="-1"></a><span class="op">(</span>d<span class="op">.*</span>d_f<span class="op">)()</span>;  <span class="co">// definitely calld D::f, same as d.f()</span></span>
-<span id="cb11-4"><a href="#cb11-4" aria-hidden="true" tabindex="-1"></a><span class="op">(</span>d<span class="op">.*</span>b_f<span class="op">)()</span>; <span class="co">// does it call B::f or D::f?</span></span></code></pre></div>
-<p>It is the position of the author that
-<code class="sourceCode default">(x.*declcall(x.Base::f()))()</code>
-should call <code class="sourceCode default">Base::f</code>, because
-INVOKE should be a perfect inverse.</p>
-<p>However, this kind of pointer to member function currently does not
-exist, although it’s trivially implementable. Its type would not be
-distinguishable from the current kind.</p>
-<p>EWG should vote on this.</p>
-<h2 data-number="3.3" id="alternatives-to-syntax"><span class="header-section-number">3.3</span> Alternatives to syntax<a href="#alternatives-to-syntax" class="self-link"></a></h2>
+<h2 data-number="3.2" id="alternatives-to-syntax"><span class="header-section-number">3.2</span> Alternatives to syntax<a href="#alternatives-to-syntax" class="self-link"></a></h2>
 <p>We could wait for reflection in which case
 <code class="sourceCode default">declcall</code> is implementable when
 we have expression reflections.</p>
-<div class="sourceCode" id="cb12"><pre class="sourceCode cpp"><code class="sourceCode cpp"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a><span class="kw">namespace</span> std<span class="op">::</span>meta <span class="op">{</span></span>
-<span id="cb12-2"><a href="#cb12-2" aria-hidden="true" tabindex="-1"></a>  <span class="kw">template</span><span class="op">&lt;</span>info r<span class="op">&gt;</span> <span class="kw">constexpr</span> <span class="kw">auto</span> declcall <span class="op">=</span> <span class="op">[]{</span></span>
-<span id="cb12-3"><a href="#cb12-3" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> <span class="kw">constexpr</span> <span class="op">(</span>is_nonstatic_member<span class="op">(</span>r<span class="op">))</span> <span class="op">{</span></span>
-<span id="cb12-4"><a href="#cb12-4" aria-hidden="true" tabindex="-1"></a>      <span class="cf">return</span> pointer_to_member<span class="op">&lt;[:</span>pm_type_of<span class="op">(</span>r<span class="op">):]&gt;(</span>r<span class="op">)</span>;</span>
-<span id="cb12-5"><a href="#cb12-5" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span> <span class="cf">else</span> <span class="op">{</span></span>
-<span id="cb12-6"><a href="#cb12-6" aria-hidden="true" tabindex="-1"></a>      <span class="cf">return</span> entity_ref<span class="op">&lt;[:</span>type_of<span class="op">:]&gt;(</span>r<span class="op">)</span>;</span>
-<span id="cb12-7"><a href="#cb12-7" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span> <span class="co">/* insert additional cases as we define them. */</span></span>
-<span id="cb12-8"><a href="#cb12-8" aria-hidden="true" tabindex="-1"></a>  <span class="op">}()</span>;</span>
-<span id="cb12-9"><a href="#cb12-9" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
-<span id="cb12-10"><a href="#cb12-10" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb12-11"><a href="#cb12-11" aria-hidden="true" tabindex="-1"></a><span class="dt">int</span> f<span class="op">(</span><span class="dt">int</span><span class="op">)</span>; <span class="co">//1 </span></span>
-<span id="cb12-12"><a href="#cb12-12" aria-hidden="true" tabindex="-1"></a><span class="dt">int</span> f<span class="op">(</span><span class="dt">long</span><span class="op">)</span>; <span class="co">//2</span></span>
-<span id="cb12-13"><a href="#cb12-13" aria-hidden="true" tabindex="-1"></a><span class="kw">constexpr</span> <span class="kw">auto</span> fptr_1 <span class="op">=</span> <span class="op">[:</span> declcall<span class="op">&lt;^</span>f<span class="op">(</span><span class="dv">1</span><span class="op">)&gt;</span> <span class="op">:]</span>; <span class="co">// 1</span></span></code></pre></div>
+<div class="sourceCode" id="cb9"><pre class="sourceCode cpp"><code class="sourceCode cpp"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a><span class="kw">namespace</span> std<span class="op">::</span>meta <span class="op">{</span></span>
+<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a>  <span class="kw">template</span><span class="op">&lt;</span>info r<span class="op">&gt;</span> <span class="kw">constexpr</span> <span class="kw">auto</span> declcall <span class="op">=</span> <span class="op">[]{</span></span>
+<span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> <span class="kw">constexpr</span> <span class="op">(</span>is_nonstatic_member<span class="op">(</span>r<span class="op">))</span> <span class="op">{</span></span>
+<span id="cb9-4"><a href="#cb9-4" aria-hidden="true" tabindex="-1"></a>      <span class="cf">return</span> pointer_to_member<span class="op">&lt;[:</span>pm_type_of<span class="op">(</span>r<span class="op">):]&gt;(</span>r<span class="op">)</span>;</span>
+<span id="cb9-5"><a href="#cb9-5" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span> <span class="cf">else</span> <span class="op">{</span></span>
+<span id="cb9-6"><a href="#cb9-6" aria-hidden="true" tabindex="-1"></a>      <span class="cf">return</span> entity_ref<span class="op">&lt;[:</span>type_of<span class="op">:]&gt;(</span>r<span class="op">)</span>;</span>
+<span id="cb9-7"><a href="#cb9-7" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span> <span class="co">/* insert additional cases as we define them. */</span></span>
+<span id="cb9-8"><a href="#cb9-8" aria-hidden="true" tabindex="-1"></a>  <span class="op">}()</span>;</span>
+<span id="cb9-9"><a href="#cb9-9" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb9-10"><a href="#cb9-10" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb9-11"><a href="#cb9-11" aria-hidden="true" tabindex="-1"></a><span class="dt">int</span> f<span class="op">(</span><span class="dt">int</span><span class="op">)</span>; <span class="co">//1 </span></span>
+<span id="cb9-12"><a href="#cb9-12" aria-hidden="true" tabindex="-1"></a><span class="dt">int</span> f<span class="op">(</span><span class="dt">long</span><span class="op">)</span>; <span class="co">//2</span></span>
+<span id="cb9-13"><a href="#cb9-13" aria-hidden="true" tabindex="-1"></a><span class="kw">constexpr</span> <span class="kw">auto</span> fptr_1 <span class="op">=</span> <span class="op">[:</span> declcall<span class="op">&lt;^</span>f<span class="op">(</span><span class="dv">1</span><span class="op">)&gt;</span> <span class="op">:]</span>; <span class="co">// 1</span></span></code></pre></div>
 <p>It’s unlikely to be quite as efficient as just hooking directly into
 the resolver, but it does have the nice property that it doesn’t take up
 a whole keyword.</p>
@@ -825,7 +773,7 @@ gets really complicated.
 <code class="sourceCode default">declcall</code> is far simpler.</p>
 <p>Many thanks to Daveed Vandevoorde for helping out with this
 example.</p>
-<h2 data-number="3.4" id="naming"><span class="header-section-number">3.4</span> Naming<a href="#naming" class="self-link"></a></h2>
+<h2 data-number="3.3" id="naming"><span class="header-section-number">3.3</span> Naming<a href="#naming" class="self-link"></a></h2>
 <p>I think <code class="sourceCode default">declcall</code> is a
 reasonable name - it hints that it’s an unevaluated operand, and it’s
 how I implemented it in clang.</p>
@@ -854,13 +802,13 @@ double-dispatch, and the list goes on and on and on and …</p>
 don’t have yet<a href="#what-does-this-give-us-that-we-dont-have-yet" class="self-link"></a></h2>
 <h3 data-number="4.1.1" id="resolving-overload-sets-for-callbacks-without-lambdas"><span class="header-section-number">4.1.1</span> Resolving overload sets for
 callbacks without lambdas<a href="#resolving-overload-sets-for-callbacks-without-lambdas" class="self-link"></a></h3>
-<div class="sourceCode" id="cb13"><pre class="sourceCode cpp"><code class="sourceCode cpp"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a><span class="co">// generic context</span></span>
-<span id="cb13-2"><a href="#cb13-2" aria-hidden="true" tabindex="-1"></a>std<span class="op">::</span>sort<span class="op">(</span>v<span class="op">.</span>begin<span class="op">()</span>, v<span class="op">.</span>end<span class="op">()</span>, <span class="op">[](</span><span class="kw">auto</span> <span class="kw">const</span><span class="op">&amp;</span> x, <span class="kw">auto</span> <span class="kw">const</span><span class="op">&amp;</span> y<span class="op">)</span> <span class="op">{</span></span>
-<span id="cb13-3"><a href="#cb13-3" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> my_comparator<span class="op">(</span>x, y<span class="op">)</span>; <span class="co">// some overload set</span></span>
-<span id="cb13-4"><a href="#cb13-4" aria-hidden="true" tabindex="-1"></a><span class="op">})</span>;</span></code></pre></div>
+<div class="sourceCode" id="cb10"><pre class="sourceCode cpp"><code class="sourceCode cpp"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a><span class="co">// generic context</span></span>
+<span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a>std<span class="op">::</span>sort<span class="op">(</span>v<span class="op">.</span>begin<span class="op">()</span>, v<span class="op">.</span>end<span class="op">()</span>, <span class="op">[](</span><span class="kw">auto</span> <span class="kw">const</span><span class="op">&amp;</span> x, <span class="kw">auto</span> <span class="kw">const</span><span class="op">&amp;</span> y<span class="op">)</span> <span class="op">{</span></span>
+<span id="cb10-3"><a href="#cb10-3" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> my_comparator<span class="op">(</span>x, y<span class="op">)</span>; <span class="co">// some overload set</span></span>
+<span id="cb10-4"><a href="#cb10-4" aria-hidden="true" tabindex="-1"></a><span class="op">})</span>;</span></code></pre></div>
 <p>becomes</p>
-<div class="sourceCode" id="cb14"><pre class="sourceCode cpp"><code class="sourceCode cpp"><span id="cb14-1"><a href="#cb14-1" aria-hidden="true" tabindex="-1"></a><span class="co">// look ma, no lambda, no inlining, and less code generation!</span></span>
-<span id="cb14-2"><a href="#cb14-2" aria-hidden="true" tabindex="-1"></a>std<span class="op">::</span>sort<span class="op">(</span>v<span class="op">.</span>begin<span class="op">()</span>, v<span class="op">.</span>end<span class="op">()</span>, declcall<span class="op">(</span>my_comparator<span class="op">(</span>v<span class="op">.</span>front<span class="op">()</span>, v<span class="op">.</span>front<span class="op">()))</span>;</span></code></pre></div>
+<div class="sourceCode" id="cb11"><pre class="sourceCode cpp"><code class="sourceCode cpp"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a><span class="co">// look ma, no lambda, no inlining, and less code generation!</span></span>
+<span id="cb11-2"><a href="#cb11-2" aria-hidden="true" tabindex="-1"></a>std<span class="op">::</span>sort<span class="op">(</span>v<span class="op">.</span>begin<span class="op">()</span>, v<span class="op">.</span>end<span class="op">()</span>, declcall<span class="op">(</span>my_comparator<span class="op">(</span>v<span class="op">.</span>front<span class="op">()</span>, v<span class="op">.</span>front<span class="op">()))</span>;</span></code></pre></div>
 <p>Note also, that in the case of a
 <code class="sourceCode default">vector&lt;int&gt;</code>, the ABI for
 the comparator is likely to take those by value, which means we get a
@@ -872,30 +820,30 @@ is not good enough here - the resolved comparator could take
 <p>We cannot correctly forward immovable type construction through
 forwarding function.</p>
 <p>Example:</p>
-<div class="sourceCode" id="cb15"><pre class="sourceCode cpp"><code class="sourceCode cpp"><span id="cb15-1"><a href="#cb15-1" aria-hidden="true" tabindex="-1"></a><span class="dt">int</span> f<span class="op">(</span>nonmovable<span class="op">)</span> <span class="op">{</span> <span class="co">/* ... */</span> <span class="op">}</span></span>
-<span id="cb15-2"><a href="#cb15-2" aria-hidden="true" tabindex="-1"></a><span class="kw">struct</span> <span class="op">{</span></span>
-<span id="cb15-3"><a href="#cb15-3" aria-hidden="true" tabindex="-1"></a>    <span class="pp">#if __cpp_expression_aliases &lt; 202506</span></span>
-<span id="cb15-4"><a href="#cb15-4" aria-hidden="true" tabindex="-1"></a>    <span class="co">// doesn&#39;t work</span></span>
-<span id="cb15-5"><a href="#cb15-5" aria-hidden="true" tabindex="-1"></a>    <span class="kw">static</span> <span class="kw">auto</span> <span class="kw">operator</span><span class="op">()(</span><span class="kw">auto</span><span class="op">&amp;&amp;</span> obj<span class="op">)</span> <span class="op">{</span></span>
-<span id="cb15-6"><a href="#cb15-6" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> f<span class="op">(</span>std<span class="op">::</span>forward<span class="op">&lt;</span><span class="kw">decltype</span><span class="op">(</span>obj<span class="op">)&gt;(</span>obj<span class="op">))</span>; <span class="co">// 1</span></span>
-<span id="cb15-7"><a href="#cb15-7" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
-<span id="cb15-8"><a href="#cb15-8" aria-hidden="true" tabindex="-1"></a>    <span class="pp">#else</span></span>
-<span id="cb15-9"><a href="#cb15-9" aria-hidden="true" tabindex="-1"></a>    <span class="co">// would work if we also had expression aliases</span></span>
-<span id="cb15-10"><a href="#cb15-10" aria-hidden="true" tabindex="-1"></a>    <span class="kw">static</span> <span class="kw">auto</span> <span class="kw">operator</span><span class="op">()(</span><span class="kw">auto</span><span class="op">&amp;&amp;</span> obj<span class="op">)</span> </span>
-<span id="cb15-11"><a href="#cb15-11" aria-hidden="true" tabindex="-1"></a>       <span class="op">=</span> declcall<span class="op">(</span>f<span class="op">(</span>std<span class="op">::</span>forward<span class="op">&lt;</span>obj<span class="op">&gt;(</span>obj<span class="op">)))</span>;      <span class="co">// 2</span></span>
-<span id="cb15-12"><a href="#cb15-12" aria-hidden="true" tabindex="-1"></a>    <span class="pp">#endif</span></span>
-<span id="cb15-13"><a href="#cb15-13" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb15-14"><a href="#cb15-14" aria-hidden="true" tabindex="-1"></a><span class="op">}</span> some_customization_point_object;</span>
-<span id="cb15-15"><a href="#cb15-15" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb15-16"><a href="#cb15-16" aria-hidden="true" tabindex="-1"></a><span class="dt">void</span> continue_with_result<span class="op">(</span><span class="kw">auto</span> callback<span class="op">)</span> <span class="op">{</span></span>
-<span id="cb15-17"><a href="#cb15-17" aria-hidden="true" tabindex="-1"></a>    callback<span class="op">(</span>nonmovable<span class="op">{</span>read_something<span class="op">()})</span>;</span>
-<span id="cb15-18"><a href="#cb15-18" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
-<span id="cb15-19"><a href="#cb15-19" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb15-20"><a href="#cb15-20" aria-hidden="true" tabindex="-1"></a><span class="dt">void</span> handler<span class="op">()</span> <span class="op">{</span></span>
-<span id="cb15-21"><a href="#cb15-21" aria-hidden="true" tabindex="-1"></a>    continue_with_result<span class="op">(</span>declcall<span class="op">(</span>f<span class="op">(</span>nonmovable<span class="op">{})))</span>; <span class="co">// works</span></span>
-<span id="cb15-22"><a href="#cb15-22" aria-hidden="true" tabindex="-1"></a>    <span class="co">// (1) doesn&#39;t work, (2) works</span></span>
-<span id="cb15-23"><a href="#cb15-23" aria-hidden="true" tabindex="-1"></a>    continue_with_result<span class="op">(</span>some_customization_point_object<span class="op">)</span>;</span>
-<span id="cb15-24"><a href="#cb15-24" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<div class="sourceCode" id="cb12"><pre class="sourceCode cpp"><code class="sourceCode cpp"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a><span class="dt">int</span> f<span class="op">(</span>nonmovable<span class="op">)</span> <span class="op">{</span> <span class="co">/* ... */</span> <span class="op">}</span></span>
+<span id="cb12-2"><a href="#cb12-2" aria-hidden="true" tabindex="-1"></a><span class="kw">struct</span> <span class="op">{</span></span>
+<span id="cb12-3"><a href="#cb12-3" aria-hidden="true" tabindex="-1"></a>    <span class="pp">#if __cpp_expression_aliases &lt; 202506</span></span>
+<span id="cb12-4"><a href="#cb12-4" aria-hidden="true" tabindex="-1"></a>    <span class="co">// doesn&#39;t work</span></span>
+<span id="cb12-5"><a href="#cb12-5" aria-hidden="true" tabindex="-1"></a>    <span class="kw">static</span> <span class="kw">auto</span> <span class="kw">operator</span><span class="op">()(</span><span class="kw">auto</span><span class="op">&amp;&amp;</span> obj<span class="op">)</span> <span class="op">{</span></span>
+<span id="cb12-6"><a href="#cb12-6" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> f<span class="op">(</span>std<span class="op">::</span>forward<span class="op">&lt;</span><span class="kw">decltype</span><span class="op">(</span>obj<span class="op">)&gt;(</span>obj<span class="op">))</span>; <span class="co">// 1</span></span>
+<span id="cb12-7"><a href="#cb12-7" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb12-8"><a href="#cb12-8" aria-hidden="true" tabindex="-1"></a>    <span class="pp">#else</span></span>
+<span id="cb12-9"><a href="#cb12-9" aria-hidden="true" tabindex="-1"></a>    <span class="co">// would work if we also had expression aliases</span></span>
+<span id="cb12-10"><a href="#cb12-10" aria-hidden="true" tabindex="-1"></a>    <span class="kw">static</span> <span class="kw">auto</span> <span class="kw">operator</span><span class="op">()(</span><span class="kw">auto</span><span class="op">&amp;&amp;</span> obj<span class="op">)</span> </span>
+<span id="cb12-11"><a href="#cb12-11" aria-hidden="true" tabindex="-1"></a>       <span class="op">=</span> declcall<span class="op">(</span>f<span class="op">(</span>std<span class="op">::</span>forward<span class="op">&lt;</span>obj<span class="op">&gt;(</span>obj<span class="op">)))</span>;      <span class="co">// 2</span></span>
+<span id="cb12-12"><a href="#cb12-12" aria-hidden="true" tabindex="-1"></a>    <span class="pp">#endif</span></span>
+<span id="cb12-13"><a href="#cb12-13" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb12-14"><a href="#cb12-14" aria-hidden="true" tabindex="-1"></a><span class="op">}</span> some_customization_point_object;</span>
+<span id="cb12-15"><a href="#cb12-15" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb12-16"><a href="#cb12-16" aria-hidden="true" tabindex="-1"></a><span class="dt">void</span> continue_with_result<span class="op">(</span><span class="kw">auto</span> callback<span class="op">)</span> <span class="op">{</span></span>
+<span id="cb12-17"><a href="#cb12-17" aria-hidden="true" tabindex="-1"></a>    callback<span class="op">(</span>nonmovable<span class="op">{</span>read_something<span class="op">()})</span>;</span>
+<span id="cb12-18"><a href="#cb12-18" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb12-19"><a href="#cb12-19" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb12-20"><a href="#cb12-20" aria-hidden="true" tabindex="-1"></a><span class="dt">void</span> handler<span class="op">()</span> <span class="op">{</span></span>
+<span id="cb12-21"><a href="#cb12-21" aria-hidden="true" tabindex="-1"></a>    continue_with_result<span class="op">(</span>declcall<span class="op">(</span>f<span class="op">(</span>nonmovable<span class="op">{})))</span>; <span class="co">// works</span></span>
+<span id="cb12-22"><a href="#cb12-22" aria-hidden="true" tabindex="-1"></a>    <span class="co">// (1) doesn&#39;t work, (2) works</span></span>
+<span id="cb12-23"><a href="#cb12-23" aria-hidden="true" tabindex="-1"></a>    continue_with_result<span class="op">(</span>some_customization_point_object<span class="op">)</span>;</span>
+<span id="cb12-24"><a href="#cb12-24" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
 <h2 data-number="4.2" id="thats-not-good-enough-to-do-all-that-work.-what-else"><span class="header-section-number">4.2</span> That’s not good enough to do
 all that work. What else?<a href="#thats-not-good-enough-to-do-all-that-work.-what-else" class="self-link"></a></h2>
 <p>Together with <span class="citation" data-cites="P2826R0">[<a href="#ref-P2826R0" role="doc-biblioref">P2826R0</a>]</span>, the two
@@ -921,14 +869,12 @@ the <code class="sourceCode default">static_cast</code> fallback in
 run-time cases)</strong></p>
 <p>SG7 confirmed author’s position that this is the correct design, and
 so has EWG.</p>
-<h1 data-number="6" id="proposed-wording"><span class="header-section-number">6</span> Proposed Wording<a href="#proposed-wording" class="self-link"></a></h1>
+<h1 data-number="6" id="proposed-wording"><span class="header-section-number">6</span> Proposed wording<a href="#proposed-wording" class="self-link"></a></h1>
 <p>We base the approach on <span>7.6.1.3
 <a href="https://wg21.link/expr.call">[expr.call]</a></span>, which
 distinguishes calls to lvalues that refer to functions, and prvalues of
 function pointer type. We must then also handle operators which resolve
 to a call to a function.</p>
-<p>In the table of keywords, in [lex.key], add</p>
-<p><span class="add" style="color: #006e28"><ins><span><code class="sourceCode default">declcall</code></span></ins></span></p>
 <p>In <span>7.6.2.1
 <a href="https://wg21.link/expr.unary.general">[expr.unary.general]</a></span></p>
 <div class="line-block"><em>unary-expression</em>:<br />
@@ -940,11 +886,19 @@ to a call to a function.</p>
 a stable tag of [expr.declcall].</p>
 <div class="add" style="color: #006e28">
 <p><span class="marginalizedparent"><a class="marginalized">1</a></span>
-The <code class="sourceCode default">declcall</code> operator yields a
-pointer to the function or member function which would be invoked by its
-<em>expression</em>. The operand of
-<code class="sourceCode default">declcall</code> is an unevaluated
-operand.</p>
+The <code class="sourceCode default">declcall</code> operator yields the
+address of the function or member function to which its unevaluated
+<em>expression</em> operand refers.</p>
+<p>[Note 1: a <code class="sourceCode default">declcall</code>
+expression is a constant expression (<span>7.7
+<a href="https://wg21.link/expr.const">[expr.const]</a></span>) – end
+note]</p>
+<p>[Note 2: if producing the value would require evaluating the operand,
+the <code class="sourceCode default">declcall</code> expression shall
+not be potentially-evaluated. In that case, <code class="sourceCode default">decltype(declcall(<em>postfix-expression</em>(<em>expression-list<sub>opt</sub></em>)))</code>
+can obtain the type <code class="sourceCode default">T</code> of the
+selected function, and <code class="sourceCode default">static_cast&lt;T&gt;(<em>postfix-expression</em>)</code>
+can resolve its value. – end note]</p>
 <p><span class="marginalizedparent"><a class="marginalized">2</a></span>
 If <em>expression</em> is not a function call (<span>7.6.1.3
 <a href="https://wg21.link/expr.call">[expr.call]</a></span>), but is an
@@ -952,18 +906,19 @@ expression that is transformed into an equivalent function call
 (<span>12.2.2.3
 <a href="https://wg21.link/over.match.oper">[over.match.oper]</a></span>/2),
 replace <em>expression</em> by the transformed expression for the
-remainder of this subclause. Otherwise, the program is ill-formed.</p>
+remainder of this subclause.</p>
 <p>Such a (possibly transformed) <em>expression</em> is of the form
 <em>postfix-expression</em> ( <em>expression-list<sub>opt</sub></em>
 ).</p>
 <p><span class="marginalizedparent"><a class="marginalized">3</a></span>
-If <em>postfix-expression</em> is a prvalue of pointer type
+If <em>postfix-expression</em> denotes a prvalue of pointer type
 (<span>7.6.1.3
 <a href="https://wg21.link/expr.call">[expr.call]</a></span>/1), the
-<code class="sourceCode default">declcall</code> expression yields an
-unspecified value of the same type as <em>postfix-expression</em>, and
-the <code class="sourceCode default">declcall</code> expression shall
-not be potentially-evaluated.</p>
+type of the <code class="sourceCode default">declcall</code> expression
+is the type of the <em>postfix-expression</em>, and the
+<code class="sourceCode default">declcall</code> expression shall not be
+potentially-evaluated. [Note: evaluating it would require evaluating the
+operand. – end note]</p>
 <p><span class="marginalizedparent"><a class="marginalized">4</a></span>
 Otherwise, let the <em>F</em> be the function selected by overload
 resolution (<span>12.2.2.2
@@ -972,10 +927,10 @@ resolution (<span>12.2.2.2
 <li><p><span class="marginalizedparent"><a class="marginalized">(4.1)</a></span> If
 <em>F</em> is a surrogate call function (<span>12.2.2.2.3
 <a href="https://wg21.link/over.call.object">[over.call.object]</a></span>/2),
-the <code class="sourceCode default">declcall</code> expression yields
-an unspecified value of type pointer to <em>F</em>, and the
-<code class="sourceCode default">declcall</code> expression shall not be
-potentially-evaluated.</p></li>
+the type of the <code class="sourceCode default">declcall</code>
+expression is the surrogate call function type, and the expression shall
+not be potentially-evaluated. [Note: evaluating the expression would
+require evaluating the operand. – end note]</p></li>
 <li><p><span class="marginalizedparent"><a class="marginalized">(4.2)</a></span>
 Otherwise, if <em>F</em> is a constructor, destructor, synthesized
 candidate (<span>7.6.9
@@ -987,66 +942,44 @@ Otherwise, if <em>F</em> is an implicit object member function, the
 result is a pointer to member function denoting <em>F</em>.</p>
 <p>If the <em>id-expression</em> in the class member access expression
 of this call is a <em>qualified-id</em>, the resulting pointer to member
-function points to <em>F</em>, bypassing virtual dispatch (see compare
-with <span>7.6.1.3
+function calls <em>F</em>, bypassing virtual dispatch (see compare with
+<span>7.6.1.3
 <a href="https://wg21.link/expr.call">[expr.call]</a></span>/2).</p>
+<p>[Note: If the <em>expression</em> is a virtual function call
+(<span>7.6.1.3
+<a href="https://wg21.link/expr.call">[expr.call]</a></span>/2), the
+value of the expression is the pointer to the statically visible member;
+but the value of this pointer will still dynamically dispatch when used
+– end note]</p>
 <p>[Example:</p>
-<div class="sourceCode" id="cb16"><pre class="sourceCode default default"><code class="sourceCode default"><span id="cb16-1"><a href="#cb16-1" aria-hidden="true" tabindex="-1"></a>struct B { virtual B* f() { return this; } };</span>
-<span id="cb16-2"><a href="#cb16-2" aria-hidden="true" tabindex="-1"></a>struct D : B { D* f() override { return this; } };</span>
-<span id="cb16-3"><a href="#cb16-3" aria-hidden="true" tabindex="-1"></a>void g() {</span>
-<span id="cb16-4"><a href="#cb16-4" aria-hidden="true" tabindex="-1"></a>  D d;</span>
-<span id="cb16-5"><a href="#cb16-5" aria-hidden="true" tabindex="-1"></a>  B&amp; rb = d;</span>
-<span id="cb16-6"><a href="#cb16-6" aria-hidden="true" tabindex="-1"></a>  auto b_f = declcall(d.B::f()); // type: B* (B::*)() </span>
-<span id="cb16-7"><a href="#cb16-7" aria-hidden="true" tabindex="-1"></a>  auto rb_f = declcall(rb.f());  // type: B* (B::*)()</span>
-<span id="cb16-8"><a href="#cb16-8" aria-hidden="true" tabindex="-1"></a>  auto d_f = declcall(d.f());    // type: D* (D::*)()</span>
-<span id="cb16-9"><a href="#cb16-9" aria-hidden="true" tabindex="-1"></a>  (d.*b_f)();  // B::f</span>
-<span id="cb16-10"><a href="#cb16-10" aria-hidden="true" tabindex="-1"></a>  (d.*rb_f)(); // D::f, via virtual dispatch</span>
-<span id="cb16-11"><a href="#cb16-11" aria-hidden="true" tabindex="-1"></a>  (d.*d_f)();  // D::f, via virtual dispatch</span>
-<span id="cb16-12"><a href="#cb16-12" aria-hidden="true" tabindex="-1"></a>}</span></code></pre></div>
+<div class="sourceCode" id="cb13"><pre class="sourceCode default default"><code class="sourceCode default"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a>struct B { virtual B* f() { return this; } };</span>
+<span id="cb13-2"><a href="#cb13-2" aria-hidden="true" tabindex="-1"></a>struct D : B { D* f() override { return this; } };</span>
+<span id="cb13-3"><a href="#cb13-3" aria-hidden="true" tabindex="-1"></a>void g() {</span>
+<span id="cb13-4"><a href="#cb13-4" aria-hidden="true" tabindex="-1"></a>  D d;</span>
+<span id="cb13-5"><a href="#cb13-5" aria-hidden="true" tabindex="-1"></a>  B&amp; rb = d;</span>
+<span id="cb13-6"><a href="#cb13-6" aria-hidden="true" tabindex="-1"></a>  auto b_f = declcall(d.B::f()); // type: B* (B::*)() </span>
+<span id="cb13-7"><a href="#cb13-7" aria-hidden="true" tabindex="-1"></a>  auto d_f = declcall(rb.f());   // type: B* (B::*)()</span>
+<span id="cb13-8"><a href="#cb13-8" aria-hidden="true" tabindex="-1"></a>  auto d_f = declcall(d.f());    // type: D* (D::*)()</span>
+<span id="cb13-9"><a href="#cb13-9" aria-hidden="true" tabindex="-1"></a>  (d.*b_f)();  // B::f</span>
+<span id="cb13-10"><a href="#cb13-10" aria-hidden="true" tabindex="-1"></a>  (d.*rb_f)(); // D::f, via virtual dispatch</span>
+<span id="cb13-11"><a href="#cb13-11" aria-hidden="true" tabindex="-1"></a>  (d.*d_f)();  // D::f, via virtual dispatch</span>
+<span id="cb13-12"><a href="#cb13-12" aria-hidden="true" tabindex="-1"></a>}</span></code></pre></div>
 <p>– end example]</p></li>
 <li><p><span class="marginalizedparent"><a class="marginalized">(4.4)</a></span>
-Otherwise, when <em>F</em> is an explicit object member function, static
-member function, or function, the result is a pointer to
-<em>F</em>.</p></li>
-<li><p><span class="marginalizedparent"><a class="marginalized">(4.5)</a></span>
-Otherwise, the program is ill-formed.</p></li>
+Otherwise, <em>F</em> is a function with an address and the result is a
+pointer to function denoting <em>F</em>.</p></li>
 </ul>
 
 </div>
-<p>Into <span>13.8.3.2
-<a href="https://wg21.link/temp.dep.type">[temp.dep.type]</a></span>,
-add to the end of p10:</p>
-<ul>
-<li><span class="marginalizedparent"><a class="marginalized">(10.13)</a></span>
-denoted by
-<code class="sourceCode default">decltype(<em>expression</em>)</code>,
-where <em>expression</em> is type-dependent.</li>
-<li><span class="add" style="color: #006e28"><ins><span class="marginalizedparent"><a class="marginalized">(10.14)</a></span>
-denoted by
-<span><code class="sourceCode default">declcall(<em>expression</em>)</code></span>,
-where <em>expression</em> is type-dependent.</ins></span></li>
-</ul>
-<p>Into <span>13.8.3.4
-<a href="https://wg21.link/temp.dep.constexpr">[temp.dep.constexpr]</a></span>,
-add to list in 2.6:</p>
-<div class="line-block">…<br />
-<code class="sourceCode default">noexcept ( <em>type-id</em> )</code><br />
-<span class="add" style="color: #006e28"><ins><span><code class="sourceCode default">declcall ( <em>expression</em> )</code></span></ins></span></div>
 <p>Add feature-test macro into 17.3.2 [version.syn] in section 2</p>
 <div class="add" style="color: #006e28">
 
-<div class="sourceCode" id="cb17"><pre class="sourceCode default default"><code class="sourceCode default"><span id="cb17-1"><a href="#cb17-1" aria-hidden="true" tabindex="-1"></a>#define __cpp_declcall 2025XXL</span></code></pre></div>
+<div class="sourceCode" id="cb14"><pre class="sourceCode default default"><code class="sourceCode default"><span id="cb14-1"><a href="#cb14-1" aria-hidden="true" tabindex="-1"></a>#define __cpp_declcall 2025XXL</span></code></pre></div>
 
 </div>
-<p>Modify the index of grammar productions as appropriate to reflect the
-new grammar production.</p>
-<h1 data-number="7" id="acknowledgements"><span class="header-section-number">7</span> Acknowledgements<a href="#acknowledgements" class="self-link"></a></h1>
-<ul>
-<li>Daveed Vandevoorde for many design discussions</li>
-<li>Joshua Berne, Davis Herring, Barry Revzin, Christoph Meerwald, and
-Brian Bi for core language review, changes, and suggestions</li>
-</ul>
-<h1 data-number="8" id="bibliography"><span class="header-section-number">8</span> References<a href="#bibliography" class="self-link"></a></h1>
+<p>TODO: check that sfinae-friendly if can’t get value; check that we
+hit all invalid cases in point 4 before we get to 4.4.</p>
+<h1 data-number="7" id="bibliography"><span class="header-section-number">7</span> References<a href="#bibliography" class="self-link"></a></h1>
 <div id="refs" class="references csl-bib-body hanging-indent" role="doc-bibliography">
 <div id="ref-N4856" class="csl-entry" role="doc-biblioentry">
 [N4856] David Sankel. 2020-03-02. C++ Extensions for Reflection. <a href="https://wg21.link/n4856"><div class="csl-block">https://wg21.link/n4856</div></a>
