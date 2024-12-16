@@ -1,6 +1,6 @@
 ---
 title: "Overload resolution hook: declcall( unevaluated-call-expression )"
-document: D2825R3
+document: P2825R3
 date: today
 audience:
   - EWG
@@ -175,11 +175,11 @@ Example:
 int f(int);
 using fptr_t = int (*)(int);
 constexpr fptr_t fptr = declcall(f(2));
-static_cast<declcall(fptr(2))>(fptr); // OK, fptr, though redundant
+static_cast<decltype(declcall(fptr(2)))>(fptr); // OK, fptr, though redundant
 struct T {
     constexpr operator fptr_t() const { return fptr; }
 };
-static_cast<declcall(T{}(2))>(T{}); // OK, fptr
+static_cast<decltype(declcall(T{}(2)))>(T{}); // OK, fptr
 ```
 
 This pattern covers all cases that need evaluated operands, while making
@@ -234,7 +234,7 @@ void h() {
   declcall(S::f(S{}));               // ok, &#12            (Q)
   declcall(s.f(S{}));                // ok, &#12            (R)
   declcall(s(1l));                   // error, #13          (S)
-  static_cast<declcall(s(1l)>(s));   // ok, &13             (S)
+  static_cast<decltype(declcall(s(1l)>)(s));   // ok, &13   (S)
   declcall(f(1, 2));                 // ok, &#15            (T)
   declcall(new (nullptr) S());       // error, not function (U)
   declcall(delete &s);               // error, not function (V)
@@ -556,15 +556,17 @@ and the `declcall` expression shall not be potentially-evaluated.
 
 :::
 
+<!--
 Into [temp.dep.type]{.sref}, add to the end of p10:
 
 - [10.13]{.pnum} denoted by `decltype(@_expression_@)`, where _expression_ is type-dependent.
 - [[10.14]{.pnum} denoted by `declcall(@_expression_@)`, where _expression_ is type-dependent.]{.add}
+-->
 
 Into [temp.dep.constexpr]{.sref}, add to list in 2.6:
 
 | ...
-| `noexcept ( @_type-id_@ )`
+| `noexcept ( @_expression_@ )`
 | [`declcall ( @_expression_@ )`]{.add}
 
 Add feature-test macro into 17.3.2 [version.syn] in section 2
@@ -577,13 +579,22 @@ Add feature-test macro into 17.3.2 [version.syn] in section 2
 
 :::
 
-Modify the index of grammar productions as appropriate to reflect the new grammar production.
+Add to Annex C:
+
+| **Affected subclause:** [lex.key]{.sref}
+| **Change:** New keyword.
+
+**Rationale:** Required for new features.
+
+**Effect on original feature:** Added to Table 5, the following identifier is now a new keyword: [`declcall`]{.add}.
+Valid C++ 2023 code using these identifiers is invalid in this revision of C++.
+
 
 
 # Acknowledgements
 
 - Daveed Vandevoorde for many design discussions
-- Joshua Berne, Davis Herring, Barry Revzin, Christoph Meerwald, and Brian Bi for core language review, changes, and suggestions
+- Joshua Berne, Davis Herring, Barry Revzin, Christof Meerwald, and Brian Bi for core language review, changes, and suggestions
 
 ---
 references:

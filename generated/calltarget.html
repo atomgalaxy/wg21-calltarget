@@ -425,7 +425,7 @@ declcall( unevaluated-call-expression )</h1>
 <table style="border:none;float:right">
   <tr>
     <td>Document #:</td>
-    <td>D2825R3</td>
+    <td>P2825R3</td>
   </tr>
   <tr>
     <td>Date:</td>
@@ -639,11 +639,11 @@ the expression is useful as the type argument to
 <div class="sourceCode" id="cb7"><pre class="sourceCode cpp"><code class="sourceCode cpp"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="dt">int</span> f<span class="op">(</span><span class="dt">int</span><span class="op">)</span>;</span>
 <span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a><span class="kw">using</span> fptr_t <span class="op">=</span> <span class="dt">int</span> <span class="op">(*)(</span><span class="dt">int</span><span class="op">)</span>;</span>
 <span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a><span class="kw">constexpr</span> fptr_t fptr <span class="op">=</span> declcall<span class="op">(</span>f<span class="op">(</span><span class="dv">2</span><span class="op">))</span>;</span>
-<span id="cb7-4"><a href="#cb7-4" aria-hidden="true" tabindex="-1"></a><span class="kw">static_cast</span><span class="op">&lt;</span>declcall<span class="op">(</span>fptr<span class="op">(</span><span class="dv">2</span><span class="op">))&gt;(</span>fptr<span class="op">)</span>; <span class="co">// OK, fptr, though redundant</span></span>
+<span id="cb7-4"><a href="#cb7-4" aria-hidden="true" tabindex="-1"></a><span class="kw">static_cast</span><span class="op">&lt;</span><span class="kw">decltype</span><span class="op">(</span>declcall<span class="op">(</span>fptr<span class="op">(</span><span class="dv">2</span><span class="op">)))&gt;(</span>fptr<span class="op">)</span>; <span class="co">// OK, fptr, though redundant</span></span>
 <span id="cb7-5"><a href="#cb7-5" aria-hidden="true" tabindex="-1"></a><span class="kw">struct</span> T <span class="op">{</span></span>
 <span id="cb7-6"><a href="#cb7-6" aria-hidden="true" tabindex="-1"></a>    <span class="kw">constexpr</span> <span class="kw">operator</span> fptr_t<span class="op">()</span> <span class="kw">const</span> <span class="op">{</span> <span class="cf">return</span> fptr; <span class="op">}</span></span>
 <span id="cb7-7"><a href="#cb7-7" aria-hidden="true" tabindex="-1"></a><span class="op">}</span>;</span>
-<span id="cb7-8"><a href="#cb7-8" aria-hidden="true" tabindex="-1"></a><span class="kw">static_cast</span><span class="op">&lt;</span>declcall<span class="op">(</span>T<span class="op">{}(</span><span class="dv">2</span><span class="op">))&gt;(</span>T<span class="op">{})</span>; <span class="co">// OK, fptr</span></span></code></pre></div>
+<span id="cb7-8"><a href="#cb7-8" aria-hidden="true" tabindex="-1"></a><span class="kw">static_cast</span><span class="op">&lt;</span><span class="kw">decltype</span><span class="op">(</span>declcall<span class="op">(</span>T<span class="op">{}(</span><span class="dv">2</span><span class="op">)))&gt;(</span>T<span class="op">{})</span>; <span class="co">// OK, fptr</span></span></code></pre></div>
 <p>This pattern covers all cases that need evaluated operands, while
 making it explicit that the operand is evaluated due to the
 <code class="sourceCode default">static_cast</code>.</p>
@@ -694,7 +694,7 @@ unevaluated.</p>
 <span id="cb8-41"><a href="#cb8-41" aria-hidden="true" tabindex="-1"></a>  declcall<span class="op">(</span>S<span class="op">::</span>f<span class="op">(</span>S<span class="op">{}))</span>;               <span class="co">// ok, &amp;#12            (Q)</span></span>
 <span id="cb8-42"><a href="#cb8-42" aria-hidden="true" tabindex="-1"></a>  declcall<span class="op">(</span>s<span class="op">.</span>f<span class="op">(</span>S<span class="op">{}))</span>;                <span class="co">// ok, &amp;#12            (R)</span></span>
 <span id="cb8-43"><a href="#cb8-43" aria-hidden="true" tabindex="-1"></a>  declcall<span class="op">(</span>s<span class="op">(</span><span class="dv">1</span><span class="bu">l</span><span class="op">))</span>;                   <span class="co">// error, #13          (S)</span></span>
-<span id="cb8-44"><a href="#cb8-44" aria-hidden="true" tabindex="-1"></a>  <span class="kw">static_cast</span><span class="op">&lt;</span>declcall<span class="op">(</span>s<span class="op">(</span><span class="dv">1</span><span class="bu">l</span><span class="op">)&gt;(</span>s<span class="op">))</span>;   <span class="co">// ok, &amp;13             (S)</span></span>
+<span id="cb8-44"><a href="#cb8-44" aria-hidden="true" tabindex="-1"></a>  <span class="kw">static_cast</span><span class="op">&lt;</span><span class="kw">decltype</span><span class="op">(</span>declcall<span class="op">(</span>s<span class="op">(</span><span class="dv">1</span><span class="bu">l</span><span class="op">)&gt;)(</span>s<span class="op">))</span>;   <span class="co">// ok, &amp;13   (S)</span></span>
 <span id="cb8-45"><a href="#cb8-45" aria-hidden="true" tabindex="-1"></a>  declcall<span class="op">(</span>f<span class="op">(</span><span class="dv">1</span>, <span class="dv">2</span><span class="op">))</span>;                 <span class="co">// ok, &amp;#15            (T)</span></span>
 <span id="cb8-46"><a href="#cb8-46" aria-hidden="true" tabindex="-1"></a>  declcall<span class="op">(</span><span class="kw">new</span> <span class="op">(</span><span class="kw">nullptr</span><span class="op">)</span> S<span class="op">())</span>;       <span class="co">// error, not function (U)</span></span>
 <span id="cb8-47"><a href="#cb8-47" aria-hidden="true" tabindex="-1"></a>  declcall<span class="op">(</span><span class="kw">delete</span> <span class="op">&amp;</span>s<span class="op">)</span>;               <span class="co">// error, not function (V)</span></span>
@@ -1013,24 +1013,17 @@ Otherwise, the program is ill-formed.</p></li>
 </ul>
 
 </div>
-<p>Into <span>13.8.3.2
-<a href="https://wg21.link/temp.dep.type">[temp.dep.type]</a></span>,
-add to the end of p10:</p>
-<ul>
-<li><span class="marginalizedparent"><a class="marginalized">(10.13)</a></span>
-denoted by
-<code class="sourceCode default">decltype(<em>expression</em>)</code>,
-where <em>expression</em> is type-dependent.</li>
-<li><span class="add" style="color: #006e28"><ins><span class="marginalizedparent"><a class="marginalized">(10.14)</a></span>
-denoted by
-<span><code class="sourceCode default">declcall(<em>expression</em>)</code></span>,
-where <em>expression</em> is type-dependent.</ins></span></li>
-</ul>
+<!--
+Into [temp.dep.type]{.sref}, add to the end of p10:
+
+- [10.13]{.pnum} denoted by `decltype(@_expression_@)`, where _expression_ is type-dependent.
+- [[10.14]{.pnum} denoted by `declcall(@_expression_@)`, where _expression_ is type-dependent.]{.add}
+-->
 <p>Into <span>13.8.3.4
 <a href="https://wg21.link/temp.dep.constexpr">[temp.dep.constexpr]</a></span>,
 add to list in 2.6:</p>
 <div class="line-block">…<br />
-<code class="sourceCode default">noexcept ( <em>type-id</em> )</code><br />
+<code class="sourceCode default">noexcept ( <em>expression</em> )</code><br />
 <span class="add" style="color: #006e28"><ins><span><code class="sourceCode default">declcall ( <em>expression</em> )</code></span></ins></span></div>
 <p>Add feature-test macro into 17.3.2 [version.syn] in section 2</p>
 <div class="add" style="color: #006e28">
@@ -1038,12 +1031,19 @@ add to list in 2.6:</p>
 <div class="sourceCode" id="cb17"><pre class="sourceCode default default"><code class="sourceCode default"><span id="cb17-1"><a href="#cb17-1" aria-hidden="true" tabindex="-1"></a>#define __cpp_declcall 2025XXL</span></code></pre></div>
 
 </div>
-<p>Modify the index of grammar productions as appropriate to reflect the
-new grammar production.</p>
+<p>Add to Annex C:</p>
+<div class="line-block"><strong>Affected subclause:</strong> <span>5.12
+<a href="https://wg21.link/lex.key">[lex.key]</a></span><br />
+<strong>Change:</strong> New keyword.</div>
+<p><strong>Rationale:</strong> Required for new features.</p>
+<p><strong>Effect on original feature:</strong> Added to Table 5, the
+following identifier is now a new keyword: <span class="add" style="color: #006e28"><ins><span><code class="sourceCode default">declcall</code></span></ins></span>.
+Valid C++ 2023 code using these identifiers is invalid in this revision
+of C++.</p>
 <h1 data-number="7" id="acknowledgements"><span class="header-section-number">7</span> Acknowledgements<a href="#acknowledgements" class="self-link"></a></h1>
 <ul>
 <li>Daveed Vandevoorde for many design discussions</li>
-<li>Joshua Berne, Davis Herring, Barry Revzin, Christoph Meerwald, and
+<li>Joshua Berne, Davis Herring, Barry Revzin, Christof Meerwald, and
 Brian Bi for core language review, changes, and suggestions</li>
 </ul>
 <h1 data-number="8" id="bibliography"><span class="header-section-number">8</span> References<a href="#bibliography" class="self-link"></a></h1>
