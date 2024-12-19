@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="generator" content="mpark/wg21" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
-  <meta name="dcterms.date" content="2024-12-16" />
+  <meta name="dcterms.date" content="2024-12-18" />
   <title>Overload resolution hook: declcall( unevaluated-call-expression
 )</title>
   <style>
@@ -425,11 +425,11 @@ declcall( unevaluated-call-expression )</h1>
 <table style="border:none;float:right">
   <tr>
     <td>Document #:</td>
-    <td>P2825R3</td>
+    <td>D2825R4</td>
   </tr>
   <tr>
     <td>Date:</td>
-    <td>2024-12-16</td>
+    <td>2024-12-18</td>
   </tr>
   <tr>
     <td style="vertical-align:top">Project:</td>
@@ -935,6 +935,20 @@ to a call to a function.</p>
     …<br />
     <code class="sourceCode default">alignof ( <em>type-id</em> )</code><br />
     <span class="add" style="color: #006e28"><ins><span><code class="sourceCode default">declcall ( <em>expression</em> )</code></span></ins></span></div>
+<p>In [expr.call], change p2:</p>
+<p>If the selected function is non-virtual, or if the
+<em>id-expression</em> in the class member access expression is a
+<em>qualified-id</em>, <span class="add" style="color: #006e28"><ins>or
+if the prvalue of pointer to member function type is a
+<em>devirtualized</em> pointer,</ins></span> that function is called.
+Otherwise, its final overrider in the dynamic type of the object
+expression is called; such a call is referred to as a virtual function
+call. <span class="add" style="color: #006e28"><ins>[Note: a
+devirtualized pointer is obtained by a
+<span><code class="sourceCode default">declcall ( <em>expression</em> )</code></span>
+[expr.declcall] where the expression is a function call whose
+<em>id-expression</em> in the class member access expression is a
+<em>qualified-id</em>. – end note]</ins></span></p>
 <p>Add new section under <span>7.6.2.6
 <a href="https://wg21.link/expr.alignof">[expr.alignof]</a></span>, with
 a stable tag of [expr.declcall].</p>
@@ -961,11 +975,12 @@ If <em>postfix-expression</em> is a prvalue of pointer type
 (<span>7.6.1.3
 <a href="https://wg21.link/expr.call">[expr.call]</a></span>/1), the
 <code class="sourceCode default">declcall</code> expression yields an
-unspecified value of the same type as <em>postfix-expression</em>, and
-the <code class="sourceCode default">declcall</code> expression shall
-not be potentially-evaluated.</p>
+unspecified prvalue of type of the <em>postfix-expression</em>, and the
+<code class="sourceCode default">declcall</code> expression shall not be
+potentially-evaluated. If it is potentially constant-evaluated, it is
+not a core constant expression.</p>
 <p><span class="marginalizedparent"><a class="marginalized">4</a></span>
-Otherwise, let the <em>F</em> be the function selected by overload
+Otherwise, let <em>F</em> be the function selected by overload
 resolution (<span>12.2.2.2
 <a href="https://wg21.link/over.match.call">[over.match.call]</a></span>).</p>
 <ul>
@@ -973,9 +988,10 @@ resolution (<span>12.2.2.2
 <em>F</em> is a surrogate call function (<span>12.2.2.2.3
 <a href="https://wg21.link/over.call.object">[over.call.object]</a></span>/2),
 the <code class="sourceCode default">declcall</code> expression yields
-an unspecified value of type pointer to <em>F</em>, and the
+an unspecified prvalue of type pointer to <em>F</em>, and the
 <code class="sourceCode default">declcall</code> expression shall not be
-potentially-evaluated.</p></li>
+potentially-evaluated. If it is potentially constant-evaluated, it is
+not a core constant expression.</p></li>
 <li><p><span class="marginalizedparent"><a class="marginalized">(4.2)</a></span>
 Otherwise, if <em>F</em> is a constructor, destructor, synthesized
 candidate (<span>7.6.9
@@ -984,12 +1000,15 @@ candidate (<span>7.6.9
 operator, the program is ill-formed.</p></li>
 <li><p><span class="marginalizedparent"><a class="marginalized">(4.3)</a></span>
 Otherwise, if <em>F</em> is an implicit object member function, the
-result is a pointer to member function denoting <em>F</em>.</p>
+result is a pointer to member function prvalue pointing to
+<em>F</em>.</p>
 <p>If the <em>id-expression</em> in the class member access expression
-of this call is a <em>qualified-id</em>, the resulting pointer to member
-function points to <em>F</em>, bypassing virtual dispatch (see compare
-with <span>7.6.1.3
-<a href="https://wg21.link/expr.call">[expr.call]</a></span>/2).</p>
+of this call is a <em>qualified-id</em>, result is a pointer to
+devirtualized member function prvalue pointing to <em>F</em>. [Note: the
+grammar production of this <em>id-expression</em> is described in
+<span>7.6.1.3
+<a href="https://wg21.link/expr.call">[expr.call]</a></span> – end
+note].</p>
 <p>[Example:</p>
 <div class="sourceCode" id="cb16"><pre class="sourceCode default default"><code class="sourceCode default"><span id="cb16-1"><a href="#cb16-1" aria-hidden="true" tabindex="-1"></a>struct B { virtual B* f() { return this; } };</span>
 <span id="cb16-2"><a href="#cb16-2" aria-hidden="true" tabindex="-1"></a>struct D : B { D* f() override { return this; } };</span>
@@ -1008,8 +1027,6 @@ with <span>7.6.1.3
 Otherwise, when <em>F</em> is an explicit object member function, static
 member function, or function, the result is a pointer to
 <em>F</em>.</p></li>
-<li><p><span class="marginalizedparent"><a class="marginalized">(4.5)</a></span>
-Otherwise, the program is ill-formed.</p></li>
 </ul>
 
 </div>
@@ -1019,6 +1036,16 @@ Into [temp.dep.type]{.sref}, add to the end of p10:
 - [10.13]{.pnum} denoted by `decltype(@_expression_@)`, where _expression_ is type-dependent.
 - [[10.14]{.pnum} denoted by `declcall(@_expression_@)`, where _expression_ is type-dependent.]{.add}
 -->
+<p>Add to [expr.const]:</p>
+<ul>
+<li><span class="marginalizedparent"><a class="marginalized">(22.4)</a></span> an
+expression of the form
+<code class="sourceCode default">&amp; <em>cast-expression</em></code>
+that occurs within a templated entity or</li>
+<li><span class="add" style="color: #006e28"><ins><span class="marginalizedparent"><a class="marginalized">(22.5)</a></span> a
+<span><code class="sourceCode default">declcall</code></span>
+expression</ins></span></li>
+</ul>
 <p>Into <span>13.8.3.4
 <a href="https://wg21.link/temp.dep.constexpr">[temp.dep.constexpr]</a></span>,
 add to list in 2.6:</p>

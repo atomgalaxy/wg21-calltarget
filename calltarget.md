@@ -1,6 +1,6 @@
 ---
 title: "Overload resolution hook: declcall( unevaluated-call-expression )"
-document: P2825R3
+document: D2825R4
 date: today
 audience:
   - EWG
@@ -496,6 +496,15 @@ In [expr.unary.general]{- .sref}
 |     [`declcall ( @_expression_@ )`]{.add}
 
 
+In [expr.call], change p2:
+
+If the selected function is non-virtual, or if the _id-expression_ in the class member access expression is a _qualified-id_,
+[or if the prvalue of pointer to member function type is a _devirtualized_ pointer,]{.add} that function is called.
+Otherwise, its final overrider in the dynamic type of the object expression is called; such a call is referred to as a virtual function call.
+[ [Note: a devirtualized pointer is obtained by a `declcall ( @_expression_@ )` [expr.declcall]
+where the expression is a function call whose _id-expression_ in the class member
+access expression is a _qualified-id_. -- end note] ]{.add}
+
 Add new section under [expr.alignof]{- .sref}, with a stable tag of [expr.declcall].
 
 :::add
@@ -514,24 +523,29 @@ Such a (possibly transformed) _expression_ is of the form
 _postfix-expression_ ( _expression-list~opt~_ ).
 
 [3]{.pnum} If _postfix-expression_ is a prvalue of pointer type ([expr.call]{.sref}/1),
-the `declcall` expression yields an unspecified value of the same type as _postfix-expression_,
+the `declcall` expression yields an unspecified prvalue of type of the _postfix-expression_,
 and the `declcall` expression shall not be potentially-evaluated.
+If it is potentially constant-evaluated, it is not a core constant expression.
 
-[4]{.pnum} Otherwise, let the _F_ be the function selected by overload resolution ([over.match.call]{- .sref}).
+[4]{.pnum} Otherwise, let _F_ be the function selected by overload resolution
+([over.match.call]{- .sref}).
 
 - [4.1]{.pnum} If _F_ is a surrogate call function
   ([over.call.object]{.sref}/2), the `declcall` expression yields an
-  unspecified value of type pointer to _F_, and the `declcall` expression shall
-  not be potentially-evaluated.
+  unspecified prvalue of type pointer to _F_, and the `declcall` expression shall
+  not be potentially-evaluated. If it is potentially constant-evaluated, it is
+  not a core constant expression.
 - [4.2]{.pnum} Otherwise, if _F_ is a constructor, destructor, synthesized candidate
   ([expr.rel]{- .sref}, [expr.eq]{- .sref}), or a built-in operator, the program is
   ill-formed.
 - [4.3]{.pnum} Otherwise, if _F_ is an implicit object member function, the
-  result is a pointer to member function denoting _F_.
+  result is a pointer to member function prvalue pointing to _F_.
 
   If the _id-expression_ in the class member access expression of this call
-  is a _qualified-id_, the resulting pointer to member function points to _F_,
-  bypassing virtual dispatch (see compare with [expr.call]{.sref}/2).
+  is a _qualified-id_, result is a pointer to devirtualized member function
+  prvalue pointing to _F_.
+  [Note: the grammar production of this _id-expression_ is described in
+  [expr.call]{.sref}  -- end note].
 
   \[Example: 
 ```
@@ -552,7 +566,6 @@ and the `declcall` expression shall not be potentially-evaluated.
 
 - [4.4]{.pnum} Otherwise, when _F_ is an explicit object member function,
   static member function, or function, the result is a pointer to _F_.
-- [4.5]{.pnum} Otherwise, the program is ill-formed.
 
 :::
 
@@ -563,11 +576,18 @@ Into [temp.dep.type]{.sref}, add to the end of p10:
 - [[10.14]{.pnum} denoted by `declcall(@_expression_@)`, where _expression_ is type-dependent.]{.add}
 -->
 
+Add to [expr.const]:
+
+- [22.4]{.pnum} an expression of the form `& @_cast-expression_@` that occurs within a templated entity or
+- [[22.5]{.pnum} a `declcall` expression]{.add}
+
+
 Into [temp.dep.constexpr]{.sref}, add to list in 2.6:
 
 | ...
 | `noexcept ( @_expression_@ )`
 | [`declcall ( @_expression_@ )`]{.add}
+
 
 Add feature-test macro into 17.3.2 [version.syn] in section 2
 
