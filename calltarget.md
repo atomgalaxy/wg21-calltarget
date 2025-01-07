@@ -23,6 +23,14 @@ The _expression_ itself is an unevaluated operand.
 
 In effect, `declcall` is a hook into the overload resolution machinery.
 
+# Revision History
+
+0. new paper!
+1. seen as `calltarget` in EWGi
+2. `calltarget` was a bad name, and design refined
+3. Seen in EWG as `declcall`, well received, must come back
+4. Added core wording and got it reviewed, more revisions. Added devirtualized pointers to member functions.
+
 # Motivation and Prior Art
 
 The language already has a number of sort-of overload resolution facilities:
@@ -39,9 +47,9 @@ overload resolution to be invoked later, if the function pointer type is not a
 perfect match:
 
 ```cpp
-template <typename R, typename Args...>
+template <typename R, typename... Args>
 struct my_erased_wrapper {
-  using fptr_t = R(*)(Args_...);
+  using fptr_t = R(*)(Args...);
   fptr_t erased;
 };
 // for some types R, T1, T2, T3
@@ -246,8 +254,6 @@ void h() {
 }
 ```
 
-TODO: call out difference between `declcall(obj.f())` and `declcall(obj.Base::f())` for virtual f.
-
 ## Interesting cases in the above example
 
 - resolving different members of a free-function overload set (A, B, C, D, T)
@@ -319,13 +325,51 @@ However, what about when we use them?
 ```
 
 It is the position of the author that `(x.*declcall(x.Base::f()))()` should
-call `Base::f`, because INVOKE should be a perfect inverse.
+call `Base::f`, because `INVOKE` should be a perfect complement to `declcall`.
 
 However, this kind of pointer to member function currently does not exist,
-although it's trivially implementable. Its type would not be distinguishable
-from the current kind.
+although it's trivially implementable.
+(GCC has an extension: <https://gcc.gnu.org/onlinedocs/gcc-14.2.0/gcc/Bound-member-functions.html>)
+Unlike the GCC extension, the type of the function pointer would not be
+distinguishable from the current one, to enable generic programming with the
+regular pointer-to-member-function call syntax.
 
-EWG should vote on this.
+We need an EWG vote on this.
+
+### Pointers to pure virtual functions
+
+In case of `struct VB { virtual void f() = 0; };`, what should
+`declcall(declval<VB&>().f())` return? Should it be ill-formed? Return a
+regular non-devirtualized pointer-to-member-function?
+
+No. Unfortunately, pure virtual functions can actually be defined;
+
+```cpp
+struct VB { virtual int f() = 0; };
+struct B : VB { int f() override { return 0; } };
+int VB::f() { return 1; }
+
+int g() {
+    B b;
+    return b.VB::f(); // OK, 1
+}
+```
+
+So, we need to be true to the specification, and return a PMF to the possibly
+undefined function, and hopefully cause a linker error down the line.
+
+That said, if one wants a normal pointer to member function, one should really
+use the evaluated syntax for it.
+
+```cpp
+int h() {
+    B b;
+    // OK, B::f, return 0
+    using pmf_type = decltype(declcall(declval<VB>().f()));
+    auto vpmf = static_cast<pmf_type>(VB::f);
+    return b.*vpmf; // OK, calls B::f
+}
+```
 
 ## Alternatives to syntax
 
@@ -479,142 +523,167 @@ SG7 confirmed author's position that this is the correct design, and so has EWG.
 
 # Proposed Wording
 
-We base the approach on [expr.call]{- .sref}, which distinguishes calls to lvalues that
-refer to functions, and prvalues of function pointer type. We must then also
-handle operators which resolve to a call to a function.
+In the table of keywords, in [lex.key]{.sref}, add
 
-In the table of keywords, in [lex.key], add
-
-[`declcall`]{.add}
-
+:::add
+> | `declcall`
+:::
 
 In [expr.unary.general]{- .sref}
 
-| _unary-expression_:
-|     ...
-|     `alignof ( @_type-id_@ )`
-|     [`declcall ( @_expression_@ )`]{.add}
+|     _unary-expression_:
+|         ...
+|         `alignof ( @_type-id_@ )`
+|         [`declcall ( @_expression_@ )`]{.add}
 
+Add to [expr.const]{.sref}:
 
-In [expr.call], change p2:
+We combine this into the `&`-expression point because the footnote applies to both.
 
-If the selected function is non-virtual, or if the _id-expression_ in the class member access expression is a _qualified-id_,
-[or if the prvalue of pointer to member function type is a _devirtualized_ pointer,]{.add} that function is called.
-Otherwise, its final overrider in the dynamic type of the object expression is called; such a call is referred to as a virtual function call.
-[ [Note: a devirtualized pointer is obtained by a `declcall ( @_expression_@ )` [expr.declcall]
-where the expression is a function call whose _id-expression_ in the class member
-access expression is a _qualified-id_. -- end note] ]{.add}
+> - [29.4]{.pnum} an expression of the form `& @_cast-expression_@` [or `declcall ( @_expression_@ )`]{.add} that occurs within a templated entity
+ 
 
-Add new section under [expr.alignof]{- .sref}, with a stable tag of [expr.declcall].
+In [dcl.mptr]{- .sref}, insert a new paragraph 5 after p4, and renumber section:
 
 :::add
-
-[1]{.pnum} The `declcall` operator yields a pointer to the function or member
-function which would be invoked by its _expression_. The operand of `declcall`
-is an unevaluated operand.
-
-[2]{.pnum} If _expression_ is not a function call ([expr.call]{- .sref}),
-but is an expression that is transformed into an equivalent function call
-([over.match.oper]{.sref}/2), replace _expression_ by the transformed
-expression for the remainder of this subclause.
-Otherwise, the program is ill-formed.
-
-Such a (possibly transformed) _expression_ is of the form
-_postfix-expression_ ( _expression-list~opt~_ ).
-
-[3]{.pnum} If _postfix-expression_ is a prvalue of pointer type ([expr.call]{.sref}/1),
-the `declcall` expression yields an unspecified prvalue of type of the _postfix-expression_,
-and the `declcall` expression shall not be potentially-evaluated.
-If it is potentially constant-evaluated, it is not a core constant expression.
-
-[4]{.pnum} Otherwise, let _F_ be the function selected by overload resolution
-([over.match.call]{- .sref}).
-
-- [4.1]{.pnum} If _F_ is a surrogate call function
-  ([over.call.object]{.sref}/2), the `declcall` expression yields an
-  unspecified prvalue of type pointer to _F_, and the `declcall` expression shall
-  not be potentially-evaluated. If it is potentially constant-evaluated, it is
-  not a core constant expression.
-- [4.2]{.pnum} Otherwise, if _F_ is a constructor, destructor, synthesized candidate
-  ([expr.rel]{- .sref}, [expr.eq]{- .sref}), or a built-in operator, the program is
-  ill-formed.
-- [4.3]{.pnum} Otherwise, if _F_ is an implicit object member function, the
-  result is a pointer to member function prvalue pointing to _F_.
-
-  If the _id-expression_ in the class member access expression of this call
-  is a _qualified-id_, result is a pointer to devirtualized member function
-  prvalue pointing to _F_.
-  [Note: the grammar production of this _id-expression_ is described in
-  [expr.call]{.sref}  -- end note].
-
-  \[Example: 
-```
-  struct B { virtual B* f() { return this; } };
-  struct D : B { D* f() override { return this; } };
-  void g() {
-    D d;
-    B& rb = d;
-    auto b_f = declcall(d.B::f()); // type: B* (B::*)() 
-    auto rb_f = declcall(rb.f());  // type: B* (B::*)()
-    auto d_f = declcall(d.f());    // type: D* (D::*)()
-    (d.*b_f)();  // B::f
-    (d.*rb_f)(); // D::f, via virtual dispatch
-    (d.*d_f)();  // D::f, via virtual dispatch
-  }
-```
-  -- end example]
-
-- [4.4]{.pnum} Otherwise, when _F_ is an explicit object member function,
-  static member function, or function, the result is a pointer to _F_.
-
+> [5]{.pnum} The value of a pointer to member function can be _devirtualized_.
+> [Note: Devirtualized pointers to member functions may be formed by `declcall` ([expr.declcall]),
+> and call expressions involving them call the function they point to, and not
+> the final overrider ([expr.call]{.sref}/2, [class.virtual]{.sref}). -- end note]
 :::
 
-<!--
-Into [temp.dep.type]{.sref}, add to the end of p10:
 
-- [10.13]{.pnum} denoted by `decltype(@_expression_@)`, where _expression_ is type-dependent.
-- [[10.14]{.pnum} denoted by `declcall(@_expression_@)`, where _expression_ is type-dependent.]{.add}
--->
+In [expr.call]{.sref}, change p2:
 
-Add to [expr.const]:
+> If the selected function is non-virtual, or if the _id-expression_ in the
+> class member access expression is a _qualified-id_
+> [, or the bound pointer prvalue ([expr.mptr.oper]{.sref}) is obtained from a
+> devirtualized pointer ([dcl.mptr]{.sref})]{.add},
+> that function is called.
+> Otherwise, its final overrider in the dynamic type of the object expression
+> is called; such a call is referred to as a virtual function call.
 
-- [22.4]{.pnum} an expression of the form `& @_cast-expression_@` that occurs within a templated entity or
-- [[22.5]{.pnum} a `declcall` expression]{.add}
+In [class.abstract]{.sref}, change p2:
 
+> ...
+> A pure virtual function need be defined only if called with, or as if with ([class.dtor]{.sref}),
+> the qualified-id syntax ([expr.prim.id.qual]{.sref}), or via a devirtualized pointer to member function ([dcl.mptr]{.sref}).
 
-Into [temp.dep.constexpr]{.sref}, add to list in 2.6:
-
-| ...
-| `noexcept ( @_expression_@ )`
-| [`declcall ( @_expression_@ )`]{.add}
-
-
-Add feature-test macro into 17.3.2 [version.syn] in section 2
+Add new section under [expr.alignof]{- .sref}, with a stable tag of [[expr.declcall]]{.add}.
 
 :::add
+ 
+> [1]{.pnum} The `declcall` operator yields a pointer prvalue to the function
+> or member function which would be invoked by its _expression_. The operand of
+> `declcall` is an unevaluated operand.
+> 
+> [2]{.pnum} If _expression_ is not a function call ([expr.call]{- .sref}),
+> but is an expression that is transformed into an equivalent function call
+> ([over.match.oper]{.sref}/2), replace _expression_ by the transformed
+> expression for the remainder of this subclause.
+> Otherwise, the program is ill-formed.
+> Such a (possibly transformed) _expression_ is of the form
+> _postfix-expression_ ( _expression-list~opt~_ ).
+> <!-- Jens says built-in operators aren't function calls and thus get taken out here. -->
+> 
+> [3]{.pnum} If _postfix-expression_ is a prvalue of pointer type `T` ([expr.call]{.sref}/1),
+> the result has type `T`,
+> its value is unspecified,
+> and the `declcall` expression shall not be potentially-evaluated.
+>
+> [4]{.pnum} Otherwise, if _postfix-expression_ is of the (possibly
+> transformed) form `E1 .* E2` ([expr.mptr.oper]{.sref})
+> where `E2` is a _cast-expression_ of type `T`,
+> the result has type `T`,
+> its value is unspecified,
+> and the `declcall` expression shall not be potentially-evaluated.
+> 
+> [5]{.pnum} Otherwise, let _F_ be the function selected by overload resolution
+> ([over.match.call]{- .sref}), and `T` its type.
+> 
+>  - [5.1]{.pnum} If _F_ is a constructor, destructor, or synthesized candidate
+>    ([expr.rel]{- .sref}, [expr.eq]{- .sref}),
+>    the program is ill-formed.
+>  - [5.2]{.pnum} Otherwise, if _F_ is a surrogate call function
+>    ([over.call.object]{.sref}/2),
+>    the result has type "pointer to `T`",
+>    its value is unspecified,
+>    and the `declcall` expression shall not be potentially-evaluated.
+>    <!-- this is to allow it in constant subexpressions where we only need the type -->
+>  - [5.3]{.pnum} Otherwise, if _F_ is an implicit object member function
+>    declared as a member of class `C`,
+>    the _postfix-expression_ is a class member access expression ([expr.ref]{.sref}).
+>    The result has type "pointer to member of class `C` of type `T`"
+>    and points to _F_.
+>    If the _id-expression_ in the class member access expression of this call
+>    is a _qualified-id_, the result pointer is a _devirtualized pointer_.
+>    ([basic.compound]{.sref}).
+>  
+>    \[Example: 
+> ```
+>   struct B { virtual B* f() { return this; } };
+>   struct D : B { D* f() override { return this; } };
+>   struct D2 : B {};
+>   void g() {
+>         D d;
+>         B& rb = d;
+>         auto b_f = declcall(d.B::f()); // type: B* (B::*)() 
+>         auto rb_f = declcall(rb.f());  // type: B* (B::*)()
+>         auto d_f = declcall(d.f());    // type: D* (D::*)()
+>         declcall(D2().f());            // type: B* (B::*)()
+>         (d.*b_f)();  // B::f, devirtualized
+>         (d.*rb_f)(); // D::f, via virtual dispatch
+>         (d.*d_f)();  // D::f, via virtual dispatch
+>   }
+> ```
+>   -- end example]
+> 
+> - [5.4]{.pnum} Otherwise, the result has type "pointer to `T`" and points to _F_.
+ 
+:::
+ 
+Into [temp.dep.constexpr]{.sref}, add to list in 2.6:
 
-```
-#define __cpp_declcall 2025XXL
-```
+> |     ...
+> |     `alignof ( @_type-id_@ )`
+> |     [`declcall ( @_expression_@ )`]{.add}
+ 
+ 
+Add feature-test macro into [version.syn]{.sref} in section 2
 
+:::add
+> ```
+> #define __cpp_declcall 2025XXL
+> ```
 :::
 
 Add to Annex C:
 
-| **Affected subclause:** [lex.key]{.sref}
-| **Change:** New keyword.
+:::add
 
-**Rationale:** Required for new features.
-
-**Effect on original feature:** Added to Table 5, the following identifier is now a new keyword: [`declcall`]{.add}.
-Valid C++ 2023 code using these identifiers is invalid in this revision of C++.
+> | **Affected subclause:** [lex.key]{.sref}
+> | **Change:** New keyword.
+> 
+> **Rationale:** Required for new features.
+> 
+> **Effect on original feature:** Added to Table 5, the following identifier is now a new keyword: [`declcall`]{.add}.
+> Valid C++ 2023 code using these identifiers is invalid in this revision of C++.
+:::
 
 
 
 # Acknowledgements
 
-- Daveed Vandevoorde for many design discussions
-- Joshua Berne, Davis Herring, Barry Revzin, Christof Meerwald, and Brian Bi for core language review, changes, and suggestions
+- Daveed Vandevoorde for many design discussions and implementation guidance
+- For core language review, changes, and suggestions (alphabetized):
+  Barry Revzin,
+  Brian Bi,
+  Christof Meerwald,
+  Davis Herring,
+  Jens Maurer,
+  Joshua Berne,
+  and Roger Orr.
+
 
 ---
 references:
