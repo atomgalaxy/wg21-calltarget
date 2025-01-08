@@ -338,36 +338,47 @@ We need an EWG vote on this.
 
 ### Pointers to pure virtual functions
 
-In case of `struct VB { virtual void f() = 0; };`, what should
-`declcall(declval<VB&>().f())` return? Should it be ill-formed? Return a
-regular non-devirtualized pointer-to-member-function?
+Conciser the following:
+
+```cpp
+struct ABC {
+    virtual int f() = 0;
+};
+
+void h() {
+    auto x = declcall(declval<ABC&>().f()); // 1
+    auto y = declcall(declval<ABC&>().ABC::f()); // 2
+}
+```
+
+What is (1)? What is (2)? Should (2) be ill-formed?
+Return a regular non-devirtualized pointer-to-member-function?
 
 No. Unfortunately, pure virtual functions can actually be defined;
 
 ```cpp
-struct VB { virtual int f() = 0; };
-struct B : VB { int f() override { return 0; } };
-int VB::f() { return 1; }
+int ABC::f() { return 1; } // OK!
+
+struct B : ABC {
+    int f() { return 2; }
+};
 
 int g() {
     B b;
-    return b.VB::f(); // OK, 1
+    b.f(); // OK, 2
+    b.ABC::f(); // OK, 1
 }
 ```
 
-So, we need to be true to the specification, and return a PMF to the possibly
-undefined function, and hopefully cause a linker error down the line.
-
-That said, if one wants a normal pointer to member function, one should really
-use the evaluated syntax for it.
+We propose that the following happens:
 
 ```cpp
 int h() {
     B b;
-    // OK, B::f, return 0
-    using pmf_type = decltype(declcall(declval<VB>().f()));
-    auto vpmf = static_cast<pmf_type>(VB::f);
-    return b.*vpmf; // OK, calls B::f
+    auto x = declcall(declval<ABC&>().f());
+    auto y = declcall(declval<ABC&>().ABC::f());
+    (b.*x)(); // OK, 2, does virtual dispatch
+    (b.*y)(); // OK, 1, does not do virtual dispatch
 }
 ```
 
