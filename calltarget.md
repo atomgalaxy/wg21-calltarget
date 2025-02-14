@@ -1,6 +1,6 @@
 ---
 title: "Overload resolution hook: declcall( unevaluated-call-expression )"
-document: D2825R5
+document: P2825R5
 date: today
 audience:
   - EWG
@@ -32,7 +32,7 @@ In effect, `declcall` is a hook into the overload resolution machinery.
 2. `calltarget` was a bad name, and design refined
 3. Seen in EWG as `declcall`, well received, must come back
 4. Added core wording and got it reviewed, more revisions. Added devirtualized pointers to member functions.
-5. Expand motivation section
+5. Expanded motivation section, resolved design question re. devirtualized pointers
 
 # Motivation and Prior Art
 
@@ -274,6 +274,7 @@ void h() {
 
 - resolving different members of a free-function overload set (A, B, C, D, T)
   - the (D) case is important - the `short` argument still resolves to the `int` overload!
+- resolving inline friend a.k.a. "hidden friend" (E)
 - constructors and destructors (L, M, U, V) - see the **possible extensions** chapter.
 - resolving different member of a member-function overload set (I, J, K, N, Q, R)
   - the (J) example is important - the call on `u` still resolves to a member function of `S`.
@@ -293,7 +294,7 @@ void h() {
   to, so unless we "force-manufacture" one, we can't make this work.
 
 
-## Design question about pointers to virtual member functions
+## Pointers to virtual member functions
 
 This paper is effectively a counterpart to `std::invoke` - give me a pointer to
 the thing that would be invoked by this expression, so I can do it later.
@@ -344,13 +345,13 @@ It is the position of the author that `(x.*declcall(x.Base::f()))()` should
 call `Base::f`, because `INVOKE` should be a perfect complement to `declcall`.
 
 However, this kind of pointer to member function currently does not exist,
-although it's trivially implementable.
-(GCC has an extension: <https://gcc.gnu.org/onlinedocs/gcc-14.2.0/gcc/Bound-member-functions.html>)
-Unlike the GCC extension, the type of the function pointer would not be
-distinguishable from the current one, to enable generic programming with the
-regular pointer-to-member-function call syntax.
+although it's trivially implementable (GCC has an extension:
+<https://gcc.gnu.org/onlinedocs/gcc-14.2.0/gcc/Bound-member-functions.html>).
+The author proposes to add the "devirtualized member function pointer"
 
-We need an EWG vote on this.
+Unlike the GCC extension, the type of the devirtualized member function pointer
+is not distinguishable from the regular member function pointer, to enable
+generic programming with the regular pointer-to-member-function call syntax.
 
 ### Pointers to pure virtual functions
 
