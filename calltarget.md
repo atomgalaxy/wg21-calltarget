@@ -1,6 +1,6 @@
 ---
 title: "Overload resolution hook: declcall( unevaluated-call-expression )"
-document: D2825R4
+document: D2825R5
 date: today
 audience:
   - EWG
@@ -8,6 +8,8 @@ audience:
 author:
   - name: Gašper Ažman
     email: <gasper.azman@gmail.com>
+  - name: Bronek Kozicki
+    email: <brok@spamcop.net>
 toc: true
 toc-depth: 2
 ---
@@ -30,10 +32,23 @@ In effect, `declcall` is a hook into the overload resolution machinery.
 2. `calltarget` was a bad name, and design refined
 3. Seen in EWG as `declcall`, well received, must come back
 4. Added core wording and got it reviewed, more revisions. Added devirtualized pointers to member functions.
+5. Expand motivation section
 
 # Motivation and Prior Art
 
-The language already has a number of sort-of overload resolution facilities:
+The language has currently no mechanism to take a pointer to a "hidden friend" function
+
+```cpp
+struct S {
+  inline friend int foo(S, int a) { return a; }
+};
+
+constexpr int(*foo_ptr)(S, int) = &S::foo; // error, no S::foo
+```
+
+There is also no tool skip the virtual dispatch of a pointer to virtual member function (later in the paper called "devirtualized pointer")
+
+More importantly, the language facilities for the overload resolution have severe limitations, as described below. These facilities are:
 
 - `static_cast`
 - assignment to a variable of a given function pointer type
@@ -64,6 +79,7 @@ my_erased_wrapper<R, T1, T2, T3> vtable = {
   - expensive for optimizers because extra inlining
   - annoying for debugging because of an extra stack frame
   - decays arguments prematurely or reifies prvalues both of which inhibit copy-elision
+  - cause unnecessary template instantiations through value-category combinations of deduced parameters
 - it places additional unwelcome requirements on the programmer, who must:
     - divine the correct `noexcept(which?)`
     - explicitly (and correctly) spell the return type of the erased function
