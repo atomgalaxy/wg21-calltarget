@@ -425,7 +425,7 @@ declcall( unevaluated-call-expression )</h1>
 <table style="border:none;float:right">
   <tr>
     <td>Document #:</td>
-    <td>D2825R5</td>
+    <td>P2825R5</td>
   </tr>
   <tr>
     <td>Date:</td>
@@ -467,8 +467,8 @@ Art<span></span></a>
 <ul>
 <li><a href="#interesting-cases-in-the-above-example" id="toc-interesting-cases-in-the-above-example"><span class="toc-section-number">4.1</span> Interesting cases in the above
 example<span></span></a></li>
-<li><a href="#design-question-about-pointers-to-virtual-member-functions" id="toc-design-question-about-pointers-to-virtual-member-functions"><span class="toc-section-number">4.2</span> Design question about pointers to
-virtual member functions<span></span></a></li>
+<li><a href="#pointers-to-virtual-member-functions" id="toc-pointers-to-virtual-member-functions"><span class="toc-section-number">4.2</span> Pointers to virtual member
+functions<span></span></a></li>
 <li><a href="#alternatives-to-syntax" id="toc-alternatives-to-syntax"><span class="toc-section-number">4.3</span> Alternatives to
 syntax<span></span></a></li>
 <li><a href="#naming" id="toc-naming"><span class="toc-section-number">4.4</span> Naming<span></span></a></li>
@@ -514,7 +514,8 @@ and design refined</li>
 well received, must come back</li>
 <li>Added core wording and got it reviewed, more revisions. Added
 devirtualized pointers to member functions.</li>
-<li>Expand motivation section</li>
+<li>Expanded motivation section, resolved design question re.
+devirtualized pointers</li>
 </ol>
 <h1 data-number="3" id="motivation-and-prior-art"><span class="header-section-number">3</span> Motivation and Prior Art<a href="#motivation-and-prior-art" class="self-link"></a></h1>
 <p>The language has currently no mechanism to take a pointer to a
@@ -742,6 +743,7 @@ C, D, T)
 <code class="sourceCode default">short</code> argument still resolves to
 the <code class="sourceCode default">int</code> overload!</li>
 </ul></li>
+<li>resolving inline friend a.k.a. “hidden friend” (E)</li>
 <li>constructors and destructors (L, M, U, V) - see the <strong>possible
 extensions</strong> chapter.</li>
 <li>resolving different member of a member-function overload set (I, J,
@@ -775,8 +777,8 @@ type is fine.</li>
 pointers to, so unless we “force-manufacture” one, we can’t make this
 work.</li>
 </ul>
-<h2 data-number="4.2" id="design-question-about-pointers-to-virtual-member-functions"><span class="header-section-number">4.2</span> Design question about pointers
-to virtual member functions<a href="#design-question-about-pointers-to-virtual-member-functions" class="self-link"></a></h2>
+<h2 data-number="4.2" id="pointers-to-virtual-member-functions"><span class="header-section-number">4.2</span> Pointers to virtual member
+functions<a href="#pointers-to-virtual-member-functions" class="self-link"></a></h2>
 <p>This paper is effectively a counterpart to
 <code class="sourceCode default">std::invoke</code> - give me a pointer
 to the thing that would be invoked by this expression, so I can do it
@@ -820,11 +822,13 @@ should call <code class="sourceCode default">Base::f</code>, because
 <code class="sourceCode default">INVOKE</code> should be a perfect
 complement to <code class="sourceCode default">declcall</code>.</p>
 <p>However, this kind of pointer to member function currently does not
-exist, although it’s trivially implementable. (GCC has an extension: <a href="https://gcc.gnu.org/onlinedocs/gcc-14.2.0/gcc/Bound-member-functions.html" class="uri">https://gcc.gnu.org/onlinedocs/gcc-14.2.0/gcc/Bound-member-functions.html</a>)
-Unlike the GCC extension, the type of the function pointer would not be
-distinguishable from the current one, to enable generic programming with
-the regular pointer-to-member-function call syntax.</p>
-<p>We need an EWG vote on this.</p>
+exist, although it’s trivially implementable (GCC has an extension: <a href="https://gcc.gnu.org/onlinedocs/gcc-14.2.0/gcc/Bound-member-functions.html" class="uri">https://gcc.gnu.org/onlinedocs/gcc-14.2.0/gcc/Bound-member-functions.html</a>).
+The author proposes to add the “devirtualized member function
+pointer”</p>
+<p>Unlike the GCC extension, the type of the devirtualized member
+function pointer is not distinguishable from the regular member function
+pointer, to enable generic programming with the regular
+pointer-to-member-function call syntax.</p>
 <h3 data-number="4.2.1" id="pointers-to-pure-virtual-functions"><span class="header-section-number">4.2.1</span> Pointers to pure virtual
 functions<a href="#pointers-to-pure-virtual-functions" class="self-link"></a></h3>
 <p>Conciser the following:</p>
