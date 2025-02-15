@@ -32,7 +32,7 @@ In effect, `declcall` is a hook into the overload resolution machinery.
 2. `calltarget` was a bad name, and design refined
 3. Seen in EWG as `declcall`, well received, must come back
 4. Added core wording and got it reviewed, more revisions. Added devirtualized pointers to member functions.
-5. Expanded motivation section, resolved design question re. devirtualized pointers
+5. Expanded motivation section, resolved design question re. devirtualized pointers, partial wording review from CWG
 
 # Motivation and Prior Art
 
@@ -164,7 +164,7 @@ constexpr auto fptr_to_2 = declcall(f(2l));
 ```
 
 The program is ill-formed if the named `@_postfix-expression_@` is not a call
-to an addressable function (such as a constructor, destructor, built-in, etc.).
+to a function (such as a constructor, destructor, built-in, etc.).
 
 ```cpp
 struct S {};
@@ -564,13 +564,6 @@ In [expr.unary.general]{- .sref}
 |         `alignof ( @_type-id_@ )`
 |         [`declcall ( @_expression_@ )`]{.add}
 
-Add to [expr.const]{.sref}:
-
-We combine this into the `&`-expression point because the footnote applies to both.
-
-> - [29.4]{.pnum} an expression of the form `& @_cast-expression_@` [or `declcall ( @_expression_@ )`]{.add} that occurs within a templated entity
- 
-
 In [dcl.mptr]{- .sref}, insert a new paragraph 5 after p4, and renumber section:
 
 :::add
@@ -595,35 +588,31 @@ In [class.abstract]{.sref}, change p2:
 
 > ...
 > A pure virtual function need be defined only if called with, or as if with ([class.dtor]{.sref}),
-> the qualified-id syntax ([expr.prim.id.qual]{.sref}), or via a devirtualized pointer to member function ([dcl.mptr]{.sref}).
+> the qualified-id syntax [[expr.prim.id.qual]{.sref}][, or via a devirtualized pointer to member function ([dcl.mptr]){.sref})]{.add}.
 
 Add new section under [expr.alignof]{- .sref}, with a stable tag of [[expr.declcall]]{.add}.
 
 :::add
  
-> [1]{.pnum} The `declcall` operator yields a pointer prvalue to the function
-> or member function which would be invoked by its _expression_. The operand of
+> [1]{.pnum} The `declcall` operator yields a pointer prvalue to the function or a pointer to the member function which would be invoked by its _expression_. The operand of
 > `declcall` is an unevaluated operand.
-> 
-> [2]{.pnum} If _expression_ is not a function call ([expr.call]{- .sref}),
-> but is an expression that is transformed into an equivalent function call
-> ([over.match.oper]{.sref}/2), replace _expression_ by the transformed
+>
+> [2]{.pnum} If the _expression_ is transformed into an equivalent function call
+> ([over.match.oper]{.sref}), replace _expression_ by the transformed
 > expression for the remainder of this subclause.
-> Otherwise, the program is ill-formed.
+> If the _expression_ is not a (possibly transformed) function call expression ([expr.call]{.sref}), the program is ill-formed.
 > Such a (possibly transformed) _expression_ is of the form
 > _postfix-expression_ ( _expression-list~opt~_ ).
 > <!-- Jens says built-in operators aren't function calls and thus get taken out here. -->
-> 
-> [3]{.pnum} If _postfix-expression_ is a prvalue of pointer type `T` ([expr.call]{.sref}/1),
-> the result has type `T`,
-> its value is unspecified,
+>
+> [3]{.pnum} If the _postfix-expression_ is a prvalue of pointer type `T`,
+> then the result has type `T`
 > and the `declcall` expression shall not be potentially-evaluated.
 >
-> [4]{.pnum} Otherwise, if _postfix-expression_ is of the (possibly
+> [4]{.pnum} Otherwise, if the _postfix-expression_ is of the (possibly
 > transformed) form `E1 .* E2` ([expr.mptr.oper]{.sref})
-> where `E2` is a _cast-expression_ of type `T`,
-> the result has type `T`,
-> its value is unspecified,
+> where `E2` is a _cast-expression_ of type `T`, then
+> the result has type `T`
 > and the `declcall` expression shall not be potentially-evaluated.
 > 
 > [5]{.pnum} Otherwise, let _F_ be the function selected by overload resolution
@@ -633,9 +622,8 @@ Add new section under [expr.alignof]{- .sref}, with a stable tag of [[expr.declc
 >    ([expr.rel]{- .sref}, [expr.eq]{- .sref}),
 >    the program is ill-formed.
 >  - [5.2]{.pnum} Otherwise, if _F_ is a surrogate call function
->    ([over.call.object]{.sref}/2),
->    the result has type "pointer to `T`",
->    its value is unspecified,
+>    ([over.call.object]{.sref}),
+>    then the result has type "pointer to `T`"
 >    and the `declcall` expression shall not be potentially-evaluated.
 >    <!-- this is to allow it in constant subexpressions where we only need the type -->
 >  - [5.3]{.pnum} Otherwise, if _F_ is an implicit object member function
@@ -669,14 +657,7 @@ Add new section under [expr.alignof]{- .sref}, with a stable tag of [[expr.declc
 > - [5.4]{.pnum} Otherwise, the result has type "pointer to `T`" and points to _F_.
  
 :::
- 
-Into [temp.dep.constexpr]{.sref}, add to list in 2.6:
 
-> |     ...
-> |     `alignof ( @_type-id_@ )`
-> |     [`declcall ( @_expression_@ )`]{.add}
- 
- 
 Add feature-test macro into [version.syn]{.sref} in section 2
 
 :::add
