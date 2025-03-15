@@ -1,6 +1,6 @@
 ---
 title: "Overload resolution hook: declcall( unevaluated-call-expression )"
-document: D2825R5
+document: P2825R5
 date: today
 audience:
   - EWG
@@ -32,23 +32,18 @@ In effect, `declcall` is a hook into the overload resolution machinery.
 2. `calltarget` was a bad name, and design refined
 3. Seen in EWG as `declcall`, well received, must come back
 4. Added core wording and got it reviewed, more revisions. Added devirtualized pointers to member functions.
-5. Expanded motivation section, resolved design question re. devirtualized pointers, partial wording review from CWG
+5. - Expanded motivation section
+   - resolved design question re. devirtualized pointers
+   - corrections from wording review from CWG
+   - New section for EWG: resolve questions around comparison between devirtualized pointer values
+   - added section about implementation experience
 
 # Motivation and Prior Art
 
-The language has currently no mechanism to take a pointer to a "hidden friend" function
+More importantly, the language facilities for the overload resolution have
+severe limitations, as described below.
 
-```cpp
-struct S {
-  inline friend int foo(S, int a) { return a; }
-};
-
-constexpr int(*foo_ptr)(S, int) = &S::foo; // error, no S::foo
-```
-
-There is also no tool skip the virtual dispatch of a pointer to virtual member function (later in the paper called "devirtualized pointer")
-
-More importantly, the language facilities for the overload resolution have severe limitations, as described below. These facilities are:
+The facilities available as of C++23 are:
 
 - `static_cast`
 - assignment to a variable of a given function pointer type
@@ -91,7 +86,8 @@ my_erased_wrapper<R, T1, T2, T3> vtable = {
 - Nested erasures do not flatten: we cannot subset type-erased wrappers (we can't divine an
   exact match in the presence of overloads) (think "subsetting vtables")
 
-Oh, if only we had a facility to ask the compiler what function we'd be calling and then *just have the pointer to it*.
+Oh, if only we had a facility to ask the compiler what function we'd be calling
+and then *just have the pointer to it*.
 
 This is what this paper is trying to provide.
 
@@ -258,7 +254,7 @@ void h() {
   declcall(S::f(S{}));               // ok, &#12            (Q)
   declcall(s.f(S{}));                // ok, &#12            (R)
   declcall(s(1l));                   // error, #13          (S)
-  static_cast<decltype(declcall(s(1l)>)(s));   // ok, &13   (S)
+  static_cast<decltype(declcall(s(1l)))>(s);   // ok, &13   (S)
   declcall(f(1, 2));                 // ok, &#15            (T)
   declcall(new (nullptr) S());       // error, not function (U)
   declcall(delete &s);               // error, not function (V)
@@ -399,6 +395,17 @@ int h() {
 }
 ```
 
+### Comparison of devirtualized values of pointer-to-member-function type
+
+Comparison of values of pointer-to-member-function type where either operand
+points to a `virtual` function is currently unspecified ([expr.eq]{.sref}).
+
+We have the ability to do something a bit more defined in this case.
+
+Specifically, if both operands are devirtualized pointers to members, the
+comparison should be performed under the current rules for pointers to
+nonvirtual member functions.
+
 ## Alternatives to syntax
 
 We could wait for reflection in which case `declcall` is implementable when we
@@ -452,6 +459,25 @@ We could call it something other unlikely to conflict, but I like `declcall`
 - `calltargetof`
 - `decltargetof`
 - `resolvetarget`
+
+`declcall` can be thought of as "resolve this call expression to the declaration of the called entity".
+
+# Implementation experience
+
+Hana Dusíková implemented the proposal in a clang fork along with some other
+extensions, an example of which can be found here:
+https://compiler-explorer.com/z/71T6GoeMo.
+
+The implementation took her approximately 2 afternoons.
+The proposal was implemented for the constexpr evaluator, and has an additional
+capability where base expressions that are constant expressions are not
+ill-formed, but instead return that constant, getting around the requirement
+for `static_cast`.
+
+There were no issues with the implementation of devirtualized function
+pointers, at least on the Itanium ABI (they are already part of the ABI).
+Microsoft's ABI readily admits an implementation as well, and we have
+confirmation of this from Microsoft.
 
 # Usecases
 
@@ -518,6 +544,43 @@ void handler() {
 }
 ```
 
+### Taking the address of a hidden friend function
+
+The language has currently no mechanism to take a pointer to a "hidden friend" function.
+
+```cpp
+struct S {
+  inline friend int foo(S, int a) { return a; }
+};
+
+constexpr int(*foo_ptr)(S, int) = &S::foo; // error, no S::foo
+declcall(foo(S{}, 1)); // ok, S::foo.
+```
+
+### No way to skip virtual dispatch when calling through pointer-to-member-function
+
+There is also no tool skip the virtual dispatch of a pointer to virtual member
+function (later in the paper called "devirtualized pointer").
+
+```cpp
+struct B {
+    virtual char f() { return 'B'; }
+};
+struct D : B {
+    char f() override { return 'D'; }
+};
+```
+
+If we have an object of type `D`, we can still explicity invoke `B::f`, but
+there is no way to do that via a pointer-to-member-function in C++23.
+
+```cpp
+D x;
+x.B::f(); // 'B'
+x.f();    // 'D'
+x.*(&B::f)();  // 'D' (!)
+```
+
 ## That's not good enough to do all that work. What else?
 
 Together with [@P2826R0], the two papers constitute the ability to implement
@@ -573,47 +636,92 @@ In [dcl.mptr]{- .sref}, insert a new paragraph 5 after p4, and renumber section:
 > the final overrider ([expr.call]{.sref}/2, [class.virtual]{.sref}). -- end note]
 :::
 
+in [expr.eq]{-, .sref}
+
+FIXME: [expr.eq]/4 needs fixing (but see temp.type also https://eel.is/c++draft/temp.type#2.1)
+- fix comparison of pointers to member function:
+- final -> same as devirtualized
+- virtual/nonvirtual => unequal
+- nonvirtual: can define comparison
+- virtual-virtual: define as points to same member (will have identical results of overload resolution)
+
+temp.type: pointers are either both devirtualized or both non-devirtualized
 
 In [expr.call]{.sref}, change p2:
 
 > If the selected function is non-virtual, or if the _id-expression_ in the
 > class member access expression is a _qualified-id_
-> [, or the bound pointer prvalue ([expr.mptr.oper]{.sref}) is obtained from a
+> [, or the bound function prvalue ([expr.mptr.oper]{.sref}) is obtained from a
 > devirtualized pointer ([dcl.mptr]{.sref})]{.add},
 > that function is called.
 > Otherwise, its final overrider in the dynamic type of the object expression
 > is called; such a call is referred to as a virtual function call.
 
+FIXME: add green/red stuff
+https://eel.is/c++draft/basic.def.odr#4.1
+> A function is named by an expression or conversion if
+> - it is the selected member of an overload set ([basic.lookup], [over.match],
+>   [over.over]) in an overload resolution performed as part of forming that
+>   expression or conversion, unless it is a pure virtual function and either
+>   the expression is not an id-expression naming the function with an
+>   explicitly qualified name or the expression forms a pointer to member
+>   ([expr.unary.op]); or
+> - it is the result of a `declcall` expression, unless the result is a
+>   pointer-to-member-function that is not devirtualized.
+
+>
+> [Note 2: This covers taking the address of functions ([conv.func],
+> [expr.unary.op], [[expr.declcall]{.sref}]{.add}), calls to named functions ([expr.call]), operator
+> overloading ([over]), user-defined conversions ([class.conv.fct]), allocation
+> functions for new-expressions ([expr.new]), as well as non-default
+> initialization ([dcl.init]).
+> A constructor selected to copy or move an object of class type is considered
+> to be named by an expression or conversion even if the call is actually
+> elided by the implementation ([class.copy.elision]).
+> — end note]
+
 In [class.abstract]{.sref}, change p2:
 
 > ...
-> A pure virtual function need be defined only if called with, or as if with ([class.dtor]{.sref}),
-> the qualified-id syntax [[expr.prim.id.qual]{.sref}][, or via a devirtualized pointer to member function ([dcl.mptr]){.sref})]{.add}.
+> [\[Note:\].{.add} A pure virtual function need be defined only if called with, or as if with ([class.dtor]{.sref}),
+> the qualified-id syntax [[expr.prim.id.qual]{.sref}].
+> A devirtualized pointer to member function is always obtained from such an expression
+> within a `declcall` expression ([dcl.mptr]){.sref}) --end note\]]{.add}.
 
 Add new section under [expr.alignof]{- .sref}, with a stable tag of [[expr.declcall]]{.add}.
 
 :::add
  
-> [1]{.pnum} The `declcall` operator yields a pointer prvalue to the function or a pointer to the member function which would be invoked by its _expression_. The operand of
-> `declcall` is an unevaluated operand.
+> [1]{.pnum} When evaluated, the `declcall` operator yields a pointer or
+> pointer to member to the function or member function which would be invoked
+> by its expression. The result is a prvalue. The operand of declcall is an
+> unevaluated operand.
+> [Note: It can be said that, when evaluated, `declcall` resolves the call to a
+> specific declaration. --end note]
 >
 > [2]{.pnum} If the _expression_ is transformed into an equivalent function call
 > ([over.match.oper]{.sref}), replace _expression_ by the transformed
-> expression for the remainder of this subclause.
+> expression for the remainder of this subclause. <!-- make this cover the surrogate call function case too -->
 > If the _expression_ is not a (possibly transformed) function call expression ([expr.call]{.sref}), the program is ill-formed.
 > Such a (possibly transformed) _expression_ is of the form
 > _postfix-expression_ ( _expression-list~opt~_ ).
 > <!-- Jens says built-in operators aren't function calls and thus get taken out here. -->
->
-> [3]{.pnum} If the _postfix-expression_ is a prvalue of pointer type `T`,
-> then the result has type `T`
-> and the `declcall` expression shall not be potentially-evaluated.
->
-> [4]{.pnum} Otherwise, if the _postfix-expression_ is of the (possibly
-> transformed) form `E1 .* E2` ([expr.mptr.oper]{.sref})
-> where `E2` is a _cast-expression_ of type `T`, then
+
+> [4]{.pnum} If the _postfix-expression_ is of the (possibly transformed) form `E1 .* E2`
+> ([expr.mptr.oper]{.sref}) > where `E2` is a _cast-expression_ of type `T`, then
 > the result has type `T`
 > and the `declcall` expression shall not be potentially-evaluated.
+>
+> [3]{.pnum} Otherwise, if the _postfix-expression_ is neither a qualified nor an
+> unqualified function call [over.call.func]{.sref}, then:
+> where `T` is the type of the _postfix-expression_,
+> if `T` is a pointer-to-fuction type, the result has type `T`, and "pointer to `T`" otherwise.
+
+<!--
+If the _postfix-expression_ is a prvalue of pointer type `T`,
+> then the result has type `T`
+> and the `declcall` expression shall not be potentially-evaluated.
+-->
 > 
 > [5]{.pnum} Otherwise, let _F_ be the function selected by overload resolution
 > ([over.match.call]{- .sref}), and `T` its type.
@@ -621,12 +729,7 @@ Add new section under [expr.alignof]{- .sref}, with a stable tag of [[expr.declc
 >  - [5.1]{.pnum} If _F_ is a constructor, destructor, or synthesized candidate
 >    ([expr.rel]{- .sref}, [expr.eq]{- .sref}),
 >    the program is ill-formed.
->  - [5.2]{.pnum} Otherwise, if _F_ is a surrogate call function
->    ([over.call.object]{.sref}),
->    then the result has type "pointer to `T`"
->    and the `declcall` expression shall not be potentially-evaluated.
->    <!-- this is to allow it in constant subexpressions where we only need the type -->
->  - [5.3]{.pnum} Otherwise, if _F_ is an implicit object member function
+>  - [5.2]{.pnum} Otherwise, if _F_ is an implicit object member function
 >    declared as a member of class `C`,
 >    the _postfix-expression_ is a class member access expression ([expr.ref]{.sref}).
 >    The result has type "pointer to member of class `C` of type `T`"
@@ -657,6 +760,10 @@ Add new section under [expr.alignof]{- .sref}, with a stable tag of [[expr.declc
 > - [5.4]{.pnum} Otherwise, the result has type "pointer to `T`" and points to _F_.
  
 :::
+
+<!-- fixme: add back the declcall ting in [temp.dep.constextpr] -->
+with better editor's notes: this is about /breaking/ value-dependence (removing
+it ) and more of the surrounding context (so it's easier to review).
 
 Add feature-test macro into [version.syn]{.sref} in section 2
 
@@ -689,6 +796,7 @@ Add to Annex C:
   Brian Bi,
   Christof Meerwald,
   Davis Herring,
+  Hubert Tong,
   Jens Maurer,
   Joshua Berne,
   and Roger Orr.
