@@ -522,7 +522,8 @@ devirtualized pointers to member functions.</li>
 <li>corrections from wording review from CWG, specifically Hubert
 Tong’s</li>
 <li>New section for EWG: resolve questions around comparison between
-devirtualized pointer values</li>
+devirtualized pointer values and
+<code class="sourceCode default">final</code> functions</li>
 <li>added section about implementation experience</li>
 </ul></li>
 </ol>
@@ -769,7 +770,7 @@ function of <code class="sourceCode default">S</code>.</li>
 <li>resolving built-in non-functions (W): we could make this work in a
 future extension (see that chapter).</li>
 <li>resolving <code class="sourceCode default">operator-&gt;</code> (N
-and O). <span class="marginalizedparent"><a class="marginalized">(expr.post.general)</a></span>
+and O). (<span class="marginalizedparent"><a class="marginalized">(expr.post.general)</a></span>)
 specifies that
 <code class="sourceCode default"><em>postfix-expression</em></code>s
 group left-to-right, which means the top-most postfix-expression is the
@@ -827,7 +828,7 @@ while (3) has type (
 <p>However, what about when we use them?</p>
 <div class="sourceCode" id="cb11"><pre class="sourceCode cpp"><code class="sourceCode cpp"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a><span class="co">// (d, rb, b_f, rb_f, d_f as above)</span></span>
 <span id="cb11-2"><a href="#cb11-2" aria-hidden="true" tabindex="-1"></a><span class="op">(</span>d<span class="op">.*</span>rb_f<span class="op">)()</span>; <span class="co">// definitely calls D::f, same as rb.f()</span></span>
-<span id="cb11-3"><a href="#cb11-3" aria-hidden="true" tabindex="-1"></a><span class="op">(</span>d<span class="op">.*</span>d_f<span class="op">)()</span>;  <span class="co">// definitely calld D::f, same as d.f()</span></span>
+<span id="cb11-3"><a href="#cb11-3" aria-hidden="true" tabindex="-1"></a><span class="op">(</span>d<span class="op">.*</span>d_f<span class="op">)()</span>;  <span class="co">// definitely calls D::f, same as d.f()</span></span>
 <span id="cb11-4"><a href="#cb11-4" aria-hidden="true" tabindex="-1"></a><span class="op">(</span>d<span class="op">.*</span>b_f<span class="op">)()</span>; <span class="co">// does it call B::f or D::f?</span></span></code></pre></div>
 <p>It is the position of the author that
 <code class="sourceCode default">(x.*declcall(x.Base::f()))()</code>
@@ -1262,7 +1263,7 @@ an unqualified function call (<span>12.2.2.2.2
 <a href="https://wg21.link/over.call.func">[over.call.func]</a></span>),
 then: where <code class="sourceCode default">T</code> is the type of the
 <em>postfix-expression</em>, if
-<code class="sourceCode default">T</code> is a pointer-to-fuction type,
+<code class="sourceCode default">T</code> is a pointer-to-function type,
 the result has type <code class="sourceCode default">T</code>, and
 “pointer to <code class="sourceCode default">T</code>” otherwise.</p>
 </blockquote>

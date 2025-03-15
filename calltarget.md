@@ -285,7 +285,7 @@ void h() {
   - the (J) example is important - the call on `u` still resolves to a member function of `S`.
 - resolving built-in non-functions (W): we could make this work in a future
   extension (see that chapter).
-- resolving `operator->` (N and O). [expr.post.general]{.pnum} specifies that
+- resolving `operator->` (N and O). ([expr.post.general]{.pnum}) specifies that
   `@_postfix-expression_@`s group left-to-right, which means the top-most
   postfix-expression is the call to `f()`, and not the `->`. To get to
   `S::operator->`, we have to ask for it explicitly.
@@ -342,7 +342,7 @@ However, what about when we use them?
 ```cpp
 // (d, rb, b_f, rb_f, d_f as above)
 (d.*rb_f)(); // definitely calls D::f, same as rb.f()
-(d.*d_f)();  // definitely calld D::f, same as d.f()
+(d.*d_f)();  // definitely calls D::f, same as d.f()
 (d.*b_f)(); // does it call B::f or D::f?
 ```
 
@@ -745,7 +745,7 @@ Add new section under [expr.alignof]{- .sref}, with a stable tag of [[expr.declc
 >> [3]{.pnum} Otherwise, if the _postfix-expression_ is neither a qualified nor an
 >> unqualified function call ([over.call.func]{.sref}), then:
 >> where `T` is the type of the _postfix-expression_,
->> if `T` is a pointer-to-fuction type, the result has type `T`, and "pointer to `T`" otherwise.
+>> if `T` is a pointer-to-function type, the result has type `T`, and "pointer to `T`" otherwise.
 
 <!--
 If the _postfix-expression_ is a prvalue of pointer type `T`,
