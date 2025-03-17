@@ -285,7 +285,7 @@ void h() {
   - the (J) example is important - the call on `u` still resolves to a member function of `S`.
 - resolving built-in non-functions (W): we could make this work in a future
   extension (see that chapter).
-- resolving `operator->` (N and O). ([expr.post.general]{.pnum}) specifies that
+- resolving `operator->` (N and O). ([expr.post.general]{.sref}) specifies that
   `@_postfix-expression_@`s group left-to-right, which means the top-most
   postfix-expression is the call to `f()`, and not the `->`. To get to
   `S::operator->`, we have to ask for it explicitly.
