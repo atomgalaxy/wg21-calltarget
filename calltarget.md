@@ -889,6 +889,7 @@ Add to Annex C:
 
 # Acknowledgements
 
+- Alex Kremer for reviews,
 - Daveed Vandevoorde for many design discussions and implementation guidance
 - For core language review, changes, and suggestions (alphabetized):
   Barry Revzin,
