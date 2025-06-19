@@ -1,6 +1,6 @@
 ---
 title: "Overload resolution hook: declcall( unevaluated-call-expression )"
-document: P2825R5
+document: D2825R6
 date: today
 audience:
   - EWG
@@ -37,6 +37,7 @@ In effect, `declcall` is a hook into the overload resolution machinery.
    - corrections from wording review from CWG, specifically Hubert Tong's
    - New section for EWG: resolve questions around comparison between devirtualized pointer values and `final` functions
    - added section about implementation experience
+6. Editorial/typesetting changes before Core review. Removed EWG question as resolved.
 
 # Motivation and Prior Art
 
@@ -247,7 +248,7 @@ void h() {
   declcall(f());                     // ok, &#1             (A)
   declcall(f(1));                    // ok, &#2             (B)
   declcall(f(std::declval<int>()));  // ok, &#2             (C)
-  declcall(f(1s));                   // ok, &#2 (!)         (D)
+  declcall(f(short{1}));             // ok, &#2 (!)         (D)
   declcall(s + s);                   // ok, &#3             (E)
   declcall(-s);                      // ok, &#4             (F)
   declcall(-u);                      // ok, &#4 (!)         (G)
@@ -279,6 +280,7 @@ void h() {
 
 - resolving different members of a free-function overload set (A, B, C, D, T)
   - the (D) case is important - the `short` argument still resolves to the `int` overload!
+- (G) - we are resolving to #4 even through a call to a derived class (`u`)
 - resolving inline friend a.k.a. "hidden friend" (E)
 - constructors and destructors (L, M, U, V) - see the **possible extensions** chapter.
 - resolving different member of a member-function overload set (I, J, K, N, Q, R)
@@ -678,33 +680,13 @@ In [expr.eq]{- .sref}, edit paragraph 4.3
 >>   non-virtual member functions for the remainder of this paragraph.
 >>   -- end note]]{.add}
 
-**ALTERNATIVE for EWG:** should we also force unequal comparison of devirtualized
-to nondevirtualized pointer values? In that case, replace:
-
-::: rm
->> - [4.3]{.pnum} If either is a pointer to a virtual member function, the result is unspecified.
-:::
-
-with
-
-::: add
->> - [4.3]{.pnum} If either is a pointer to a virtual member function, then if
->>   exactly one of them is devirtualized, they compare unequal.
->>   If neither is devirtualized, the result is unspecified.
->>   [[Note: If both are devirtualized, they are treated as pointers to
->>   non-virtual member functions for the remainder of this paragraph.
->>   -- end note]]{.add}
-:::
-
-**END ALTERNATIVE**.
-
 In [dcl.mptr]{- .sref}, insert a new paragraph 5 after p4, and renumber section:
 
 :::add
 >> [5]{.pnum} The value of a pointer to member function can be _devirtualized_.
 >> [Note: Devirtualized pointers to member functions may be formed by `declcall` ([expr.declcall]),
->> and call expressions involving them call the function they point to, and not
->> the final overrider ([expr.call]{.sref}/2, [class.virtual]{.sref}). -- end note]
+>> and call expressions that involve them call the function they point to, and not
+>> the final overrider ([expr.call]{.sref}, [class.virtual]{.sref}). -- end note]
 :::
 
 In [expr.call]{.sref}, change p2:
@@ -723,29 +705,29 @@ Add new section under [expr.alignof]{- .sref}, with a stable tag of [[expr.declc
  
 >> [1]{.pnum} When evaluated, the `declcall` operator yields a pointer or
 >> pointer to member to the function or member function which would be invoked
->> by its expression. The result is a prvalue. The operand of declcall is an
+>> by its expression. The result is a prvalue. The operand of `declcall` is an
 >> unevaluated operand.
 >> [Note: It can be said that, when evaluated, `declcall` resolves the call to a
 >> specific declaration. --end note]
 >>
 >> [2]{.pnum} If the _expression_ is transformed into an equivalent function call
->> ([over.match.oper]{.sref}), replace _expression_ by the transformed
+>> ([over.match.oper]{.sref}), replace the _expression_ by the transformed
 >> expression for the remainder of this subclause. <!-- make this cover the surrogate call function case too -->
 >> If the _expression_ is not a (possibly transformed) function call expression ([expr.call]{.sref}), the program is ill-formed.
 >> Such a (possibly transformed) _expression_ is of the form
 >> _postfix-expression_ ( _expression-list~opt~_ ).
 >> <!-- Jens says built-in operators aren't function calls and thus get taken out here. -->
 
->> [4]{.pnum} If the _postfix-expression_ is of the (possibly transformed) form `E1 .* E2`
+>> [3]{.pnum} If the _postfix-expression_ is of the (possibly transformed) form `E1 .* E2`
 >> ([expr.mptr.oper]{.sref}) 
 >> where `E2` is a _cast-expression_ of type `T`, then
 >> the result has type `T`
 >> and the `declcall` expression shall not be potentially-evaluated.
 >>
->> [3]{.pnum} Otherwise, if the _postfix-expression_ is neither a qualified nor an
+>> [4]{.pnum} Otherwise, if the _postfix-expression_ is neither a qualified nor an
 >> unqualified function call ([over.call.func]{.sref}), then:
 >> where `T` is the type of the _postfix-expression_,
->> if `T` is a pointer-to-function type, the result has type `T`, and "pointer to `T`" otherwise.
+>> if `T` is a pointer-to-function type, then the result has type `T`, and "pointer to `T`" otherwise.
 
 <!--
 If the _postfix-expression_ is a prvalue of pointer type `T`,
@@ -900,6 +882,9 @@ Add to Annex C:
   Jens Maurer,
   Joshua Berne,
   and Roger Orr.
+- for help with final review before Core rewiew in Sofia 2025:
+  - Braden Ganetsky
+  - Zach Laine
 
 
 ---
